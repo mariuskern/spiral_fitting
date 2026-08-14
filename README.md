@@ -1,25 +1,30 @@
 # Spiral Fitting
 
-## Folders
+This repository contains the code and configuration required to run the Spiral Fitting pipeline. It combines components from the the ScrollPrize **villa** repository and **spiral-fit-consumer-gpu** repository.
 
-- `spiral-fit-consumer-gpu`: Contains the code from [https://github.com/7jycwjmbfn-eng/spiral-fit-consumer-gpu](https://github.com/7jycwjmbfn-eng/spiral-fit-consumer-gpu/commit/f189740211f462193973055a32e3269c03301587) (Commit: f189740)
-- `villa`: Contains the spiral code from [https://github.com/ScrollPrize/villa](https://github.com/ScrollPrize/villa/tree/7769da8cf2233310570608feecc127066a7c0c7c/volume-cartographer/scripts/spiral) (Commit: 7769da8)
-- `villa/spiral_progress.py`: Code comes from volume-cartographer/scripts/spiral/spiral_progress.py(https://github.com/ScrollPrize/villa/blob/9761f14773a3ed41f2459bbf689a8f1998a656ed/volume-cartographer/scripts/spiral/spiral_progress.py) (Commit: 9761f14)
+## Sources
 
-## How to run
+The repository combines code from multiple sources:
 
-1. Create conda environment:
+- `spiral-fit-consumer-gpu`: Based on [**spiral-fit-consumer-gpu**](https://github.com/7jycwjmbfn-eng/spiral-fit-consumer-gpu/commit/f189740211f462193973055a32e3269c03301587) (Commit: f189740)
+- `villa`: Based on [**villa**](https://github.com/ScrollPrize/villa/tree/7769da8cf2233310570608feecc127066a7c0c7c/volume-cartographer/scripts/spiral) (Commit: 7769da8)
+- `villa/spiral_progress.py`: Based on [**volume-cartographer/scripts/spiral/spiral_progress.py**](https://github.com/ScrollPrize/villa/blob/9761f14773a3ed41f2459bbf689a8f1998a656ed/volume-cartographer/scripts/spiral/spiral_progress.py) (Commit: 9761f14)
+
+## Getting Started
+
+1. Create the python environment:
 
     ```bash
     conda create -n villa-spiral python
     conda activate villa-spiral
+
     pip install uv
     uv pip install torch torchvision
     uv pip install -e villa
     uv pip install python-dotenv
     ```
 
-2. Download data:
+2. Download the dataset:
 
     ```bash
     rclone copy :http: ./spiral_datasets/phercparis4 \
@@ -30,9 +35,16 @@
     -P
     ```
 
-    Alternativel the data can be downloaded the data from huggingface(https://huggingface.co/buckets/scrollprize/datasets/tree/spiral/PHercParis4). The `fetch_roi.py` and `fetch_tree.py` can be used for that. Refer to `fast_spiral_fit/README.md` and `fast_spiral_fit/REPRO.md`.
+    Alternatively, the dataset can be downloaded from Hugging Face:
 
-3. Create a `.env` and set the following environment variables:
+    https://huggingface.co/buckets/scrollprize/datasets/tree/spiral/PHercParis4
+
+    The helper scripts `fast_spiral_fit/fetch_roi.py` and `fast_spiral_fit/fetch_tree.py` can be used for downloading. See the following documentation for details:
+
+    - `fast_spiral_fit/README.md`
+    - `fast_spiral_fit/REPRO.md`
+
+3. Create a `.env` file in the project root and define the following environment variables:
 
     ```bash
     FIT_DATASET=/path/to/PHercParis4
@@ -47,10 +59,15 @@
     FIT_SPIRAL_RESUME_PATH=./fit_out/<run>/checkpoint_periodic.ckpt # if you want to resume from checkpoint
     ```
 
-    4. Set variables at the beginning of `villa/fit_spiral.py` (Starting around line: 150) and `default_config` (Starting around line: 160)
+4. Adjust the fitting configuration
+
+    Before running the pipeline, edit the configuration at the beginning of `villa/fit_spiral.py`:
+
+    - Around **line 150**: set the required variables.
+    - Around **line 160**: adjust the `default_config` as needed for your experiment.
 
 5. Run
 
     ```bash
-    python fast_spiral_fit/run_fit.py 
+    python fast_spiral_fit/run_fit.py
     ```
