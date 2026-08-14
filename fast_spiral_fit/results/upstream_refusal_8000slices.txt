@@ -1,0 +1,6 @@
+                       ~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/root/villa/volume-cartographer/scripts/spiral/sparse_cuda_cache.py", line 182, in _plan_slots
+    raise RuntimeError(
+    ...<3 lines>...
+    )
+RuntimeError: lasagna grad_mag gather touches 35355 chunks (1.08 GiB), exceeding its 28105-chunk LRU capacity; increase the corresponding FIT_SPIRAL_SPARSE_*_CACHE_GB
