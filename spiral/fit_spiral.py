@@ -105,9 +105,16 @@ from transforms import SpiralAndTransform
 configure_torch_threads_from_env()
 
 
+from dotenv import load_dotenv
+load_dotenv()
+for key in ["DATA_DIR", "CODE_DIR", "OUTPUT_DIR"]:
+    if key in os.environ:
+        os.environ[key] = os.path.expandvars(os.environ[key])
+
+
 # PHercParis4
 # dataset_path = '/ephemeral/paul/spiral/dataset'
-dataset_path = 'D:/Dokumente/Development/Datasets/spiral_datasets/phercparis4'
+dataset_path = os.environ["DATASET"]
 scroll_zarr_path = None
 normal_nx_zarr_path = None # f'{dataset_path}/lasagna_inputs/las_008_nx.ome.zarr'
 normal_ny_zarr_path = None # f'{dataset_path}/lasagna_inputs/las_008_ny.ome.zarr'

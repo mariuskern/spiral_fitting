@@ -56,14 +56,20 @@ The repository combines code from multiple sources:
     FIT_SPIRAL_RESUME_PATH=./fit_out/<run>/checkpoint_periodic.ckpt # if you want to resume from checkpoint
     ``` -->
 
-3. Adjust the fitting configuration
+3. Create a `.env` file in the project root and define the following environment variables:
+
+    ```bash
+    DATASET=/path/to/PHercParis4
+    ```
+
+4. Adjust the fitting configuration
 
     Before running the pipeline, edit the configuration at the beginning of `villa/fit_spiral.py`:
 
     - Around **line 150**: set the required variables.
     - Around **line 160**: adjust the `default_config` as needed for your experiment.
 
-4. Run
+5. Run
 
     ```bash
     python spiral/fit_spiral.py
