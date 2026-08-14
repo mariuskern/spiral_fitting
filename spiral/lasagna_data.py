@@ -76,8 +76,9 @@ def prepare_lasagna_volume(
         raise RuntimeError(f'lasagna z-ROI [{z_lo}, {z_hi}) is empty (zarr z size {z_size})')
 
     roi_shape = (z_hi - z_lo, reference_shape[1], reference_shape[2])
+    from fast_cache import FastSparseCudaCache as BoundedSparseCudaCache
     from sparse_cuda_cache import (
-        BoundedSparseCudaCache,
+        # BoundedSparseCudaCache,
         SparseLasagnaStore,
         cache_budget_bytes,
     )
@@ -248,8 +249,9 @@ def prepare_surf_sdt_volume(
     }
 
     shape = (z_hi - z_lo, int(array.shape[1]), int(array.shape[2]))
+    from fast_cache import FastSparseCudaCache as BoundedSparseCudaCache
     from sparse_cuda_cache import (
-        BoundedSparseCudaCache,
+        # BoundedSparseCudaCache,
         SparseScalarStore,
         cache_budget_bytes,
     )

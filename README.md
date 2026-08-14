@@ -6,9 +6,9 @@ This repository contains the code and configuration required to run the Spiral F
 
 The repository combines code from multiple sources:
 
-- `spiral-fit-consumer-gpu`: Based on [**spiral-fit-consumer-gpu**](https://github.com/7jycwjmbfn-eng/spiral-fit-consumer-gpu/commit/f189740211f462193973055a32e3269c03301587) (Commit: f189740)
-- `villa`: Based on [**villa**](https://github.com/ScrollPrize/villa/tree/7769da8cf2233310570608feecc127066a7c0c7c/volume-cartographer/scripts/spiral) (Commit: 7769da8)
-- `villa/spiral_progress.py`: Based on [**volume-cartographer/scripts/spiral/spiral_progress.py**](https://github.com/ScrollPrize/villa/blob/9761f14773a3ed41f2459bbf689a8f1998a656ed/volume-cartographer/scripts/spiral/spiral_progress.py) (Commit: 9761f14)
+- [**spiral-fit-consumer-gpu**](https://github.com/7jycwjmbfn-eng/spiral-fit-consumer-gpu/commit/f189740211f462193973055a32e3269c03301587) (Commit: f189740)
+- [**villa**](https://github.com/ScrollPrize/villa/tree/7769da8cf2233310570608feecc127066a7c0c7c/volume-cartographer/scripts/spiral) (Commit: 7769da8)
+- [**villa**](https://github.com/ScrollPrize/villa/blob/9761f14773a3ed41f2459bbf689a8f1998a656ed/volume-cartographer/scripts/spiral/spiral_progress.py) (Commit: 9761f14) (only `villa/spiral_progress.py`)
 
 ## Getting Started
 
@@ -39,12 +39,9 @@ The repository combines code from multiple sources:
 
     https://huggingface.co/buckets/scrollprize/datasets/tree/spiral/PHercParis4
 
-    The helper scripts `fast_spiral_fit/fetch_roi.py` and `fast_spiral_fit/fetch_tree.py` can be used for downloading. See the following documentation for details:
+    The helper scripts `fast_spiral_fit/fetch_roi.py` and `fast_spiral_fit/fetch_tree.py` can be used to download the dataset. Set the `LOCAL` constant at the beginning of each script to the desired dataset location before running it.
 
-    - `fast_spiral_fit/README.md`
-    - `fast_spiral_fit/REPRO.md`
-
-3. Create a `.env` file in the project root and define the following environment variables:
+<!-- 3. Create a `.env` file in the project root and define the following environment variables:
 
     ```bash
     FIT_DATASET=/path/to/PHercParis4
@@ -57,17 +54,17 @@ The repository combines code from multiple sources:
     FIT_USE_FAST_CACHE=1 # 0 = upstream cache (the A/B baseline)
     FIT_USE_FAST_LINK=1 # 0 = upstream brute-force linking
     FIT_SPIRAL_RESUME_PATH=./fit_out/<run>/checkpoint_periodic.ckpt # if you want to resume from checkpoint
-    ```
+    ``` -->
 
-4. Adjust the fitting configuration
+3. Adjust the fitting configuration
 
     Before running the pipeline, edit the configuration at the beginning of `villa/fit_spiral.py`:
 
     - Around **line 150**: set the required variables.
     - Around **line 160**: adjust the `default_config` as needed for your experiment.
 
-5. Run
+4. Run
 
     ```bash
-    python fast_spiral_fit/run_fit.py
+    python spiral/fit_spiral.py
     ```

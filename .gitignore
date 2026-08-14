@@ -1,5 +1,7 @@
 villa/fit_out
 .env
+.vscode
+out
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

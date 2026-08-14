@@ -1,7 +1,0 @@
- loaded 4921 patches
- loaded 40782 unverified patches
-kept 5529642 / 6044103 tracks
-track crossings: indexing 208498256 points from 5529642 tracks (all partners)
-track crossings: 9350674 exact crossing events, 3770653/5529642 tracks have partners, 18699758 directed partner records retained
-trainable parameters: 136,558,981 (546.2 MB) - gradient volume all-reduced every step in distributed mode
-100%|██████████| 30000/30000 [4:55:40<00:00,  1.69it/s]

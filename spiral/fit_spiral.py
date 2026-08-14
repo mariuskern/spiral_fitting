@@ -137,7 +137,7 @@ tracks_dbm_path = None # f'{dataset_path}/tracks/2um_ds2_ps256_surf_v2.dbm'  # o
 spiral_outward_sense = 'CW'  # CW | ACW
 umbilicus_z_to_yx = lambda: json_umbilicus_z_to_yx(f'{dataset_path}/umbilicus.json', coordinate_scale=1.0)
 scroll_name = 's1'
-z_begin, z_end = 4000, 17000
+z_begin, z_end = 4000, 8000 # 4000, 17000
 voxel_size_um = 9.6
 cache_path = os.environ.get('FIT_SPIRAL_CACHE_DIR', '../cache')
 lasagna_scale = 4

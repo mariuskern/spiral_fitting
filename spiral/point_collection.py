@@ -406,58 +406,60 @@ def _resolve_between_patches_targets(
     return None
 
 
-def _link_collection_to_patch_subset(
-    links: Dict[str, List[PointPatchLink]],
-    collection_id: int,
-    collection: Dict[str, Any],
-    candidate_patches: Dict[str, Patch],
-    tolerance: float,
-    hit_policy: str = 'nearest',
-) -> None:
-    """Attach each point of one collection to the nearest of ``candidate_patches``.
+# def _link_collection_to_patch_subset(
+#     links: Dict[str, List[PointPatchLink]],
+#     collection_id: int,
+#     collection: Dict[str, Any],
+#     candidate_patches: Dict[str, Patch],
+#     tolerance: float,
+#     hit_policy: str = 'nearest',
+# ) -> None:
+#     """Attach each point of one collection to the nearest of ``candidate_patches``.
 
-    Brute-force projection (``Patch.project``) restricted to the given patch
-    subset; the nearest patch within ``tolerance`` wins. Shared by the general
-    fallback (all patches) and the "between_patches" special case (the named
-    pair only).
-    """
-    device = torch.device('cpu')
-    tolerance_t = torch.tensor(tolerance, device=device, dtype=torch.float32)
+#     Brute-force projection (``Patch.project``) restricted to the given patch
+#     subset; the nearest patch within ``tolerance`` wins. Shared by the general
+#     fallback (all patches) and the "between_patches" special case (the named
+#     pair only).
+#     """
+#     device = torch.device('cpu')
+#     tolerance_t = torch.tensor(tolerance, device=device, dtype=torch.float32)
 
-    for point_id, point in collection['points'].items():
-        point_zyx = torch.as_tensor(point.get('zyx', point['p'][::-1]), dtype=torch.float32, device=device)
+#     for point_id, point in collection['points'].items():
+#         point_zyx = torch.as_tensor(point.get('zyx', point['p'][::-1]), dtype=torch.float32, device=device)
 
-        nearest_patch_id = None
-        nearest_distance = torch.tensor(float('inf'), device=device)
-        nearest_ij = None
-        best_area = -1.0
+#         nearest_patch_id = None
+#         nearest_distance = torch.tensor(float('inf'), device=device)
+#         nearest_ij = None
+#         best_area = -1.0
 
-        for patch_id, patch in candidate_patches.items():
-            ij_coord, distance = patch.project(point_zyx)
-            if distance > tolerance_t:
-                continue
-            if hit_policy == 'largest_area':
-                area = float(patch.area)
-                is_better = area > best_area or (area == best_area and distance < nearest_distance)
-            else:
-                is_better = distance < nearest_distance
-            if is_better:
-                nearest_distance = distance
-                nearest_patch_id = patch_id
-                nearest_ij = ij_coord
-                best_area = float(patch.area)
+#         for patch_id, patch in candidate_patches.items():
+#             ij_coord, distance = patch.project(point_zyx)
+#             if distance > tolerance_t:
+#                 continue
+#             if hit_policy == 'largest_area':
+#                 area = float(patch.area)
+#                 is_better = area > best_area or (area == best_area and distance < nearest_distance)
+#             else:
+#                 is_better = distance < nearest_distance
+#             if is_better:
+#                 nearest_distance = distance
+#                 nearest_patch_id = patch_id
+#                 nearest_ij = ij_coord
+#                 best_area = float(patch.area)
 
-        if nearest_patch_id:
-            _record_point_patch_link(
-                links,
-                collection,
-                collection_id,
-                point_id,
-                point,
-                nearest_patch_id,
-                float(nearest_distance.cpu().item()),
-                nearest_ij.tolist(),
-            )
+#         if nearest_patch_id:
+#             _record_point_patch_link(
+#                 links,
+#                 collection,
+#                 collection_id,
+#                 point_id,
+#                 point,
+#                 nearest_patch_id,
+#                 float(nearest_distance.cpu().item()),
+#                 nearest_ij.tolist(),
+#             )
+
+from fast_link import link_collection_to_patch_subset as _link_collection_to_patch_subset
 
 
 def link_points_to_patches(
