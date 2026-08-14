@@ -184,7 +184,7 @@ default_config = {
     'learning_rate': 3.e-5,
     'exp_lr_schedule': True,
     'lr_final_factor': 0.3,
-    'num_training_steps': 10, # 30_000,
+    'num_training_steps': int(os.environ["NUM_TRAINING_STEPS"]), # 30_000,
     'num_flow_integration_steps': 3,
     'flow_integration_solver': 'rk4',
     'num_flow_timesteps': 1,

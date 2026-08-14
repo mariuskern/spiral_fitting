@@ -60,6 +60,7 @@ The repository combines code from multiple sources:
 
     ```bash
     DATASET=/path/to/PHercParis4
+    NUM_TRAINING_STEPS=<num_training_steps>
     ```
 
 4. Adjust the fitting configuration
@@ -69,7 +70,7 @@ The repository combines code from multiple sources:
     - Around **line 150**: set the required variables.
     - Around **line 160**: adjust the `default_config` as needed for your experiment.
 
-5. Run
+5. Run the pipeline
 
     ```bash
     python spiral/fit_spiral.py
