@@ -75,3 +75,57 @@ The repository combines code from multiple sources:
     ```bash
     python spiral/fit_spiral.py
     ```
+
+## Installing the VC binaries
+
+1. Download the docker container
+
+    ```bash
+    # Download
+    apptainer pull ~/volume-cartographer.sif docker://ghcr.io/scrollprize/volume-cartographer:edge
+
+    # Run shell
+    apptainer shell ~/volume-cartographer.sif
+
+    # Run command
+    apptainer exec ~/volume-cartographer.sif <name_of_bin>
+    ```
+
+2. Create a file that calls the scripts that are located inside the docker container (e.g., called vc)
+
+    ```
+    #!/bin/bash
+
+    IMAGE=$HOME/volume-cartographer.sif
+    exec apptainer exec "$IMAGE" "$(basename "$0")" "$@"b
+    ```
+
+3. Make that file executable
+
+    ```bash
+    chmod +x ~/bin/vc
+    ```
+
+4. Create links connecting the desired command with `~/bin/vc`
+
+    ```bash
+    ln -s ~/bin/vc ~/bin/vc_render_tifxyz
+    ln -s ~/bin/vc ~/bin/vc_tifxyz_trim
+    ln -s ~/bin/vc ~/bin/vc_tifxyz2obj
+    ln -s ~/bin/vc ~/bin/flatboi
+    ln -s ~/bin/vc ~/bin/vc_obj2tifxyz
+    ln -s ~/bin/vc ~/bin/vc_obj_uv_lift
+    ```
+
+
+5. `export PATH=$HOME/bin:$PATH`
+
+## Getting started with `render_ink.py`
+
+The python environment should already have been created.
+
+1. Download the dataset:
+
+    ```bash
+    wget https://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/volumes_zarr_standardized/54keV_7.91um_Scroll1B.7z
+    ```
