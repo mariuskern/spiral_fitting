@@ -224,9 +224,9 @@ def prepare_lasagna_volume(
         raise RuntimeError(f'lasagna z-ROI [{z_lo}, {z_hi}) is empty (store z size {z_size})')
 
     roi_shape = (z_hi - z_lo, reference_shape[1], reference_shape[2])
-    # from sparse_cuda_cache import ResidentBrickPool, SparseLasagnaStore
-    from fast_cache import FastSparseCudaCache
-    from sparse_cuda_cache_7769da8 import SparseLasagnaStore, cache_budget_bytes
+    from sparse_cuda_cache import ResidentBrickPool, SparseLasagnaStore
+    # from fast_cache import FastSparseCudaCache
+    # from sparse_cuda_cache_7769da8 import SparseLasagnaStore, cache_budget_bytes
     device = torch.device('cuda')
     normal_cache = None
     if use_normals:
@@ -234,60 +234,60 @@ def prepare_lasagna_volume(
             progress.begin(
                 'loading', 'Loading normal volumes onto GPU',
                 step=0, total_steps=0, unit='bricks')
-        # normal_cache = ResidentBrickPool(
-        #     normal_sidecar,
-        #     origin_zyx=(z_lo, 0, 0),
-        #     z_roi=(z_lo, z_hi),
-        #     device=device,
-        #     label='lasagna normals',
-        #     expected_channels=2,
-        #     progress_callback=(
-        #         (lambda current, total, detail: progress.update(
-        #             current, total_steps=total, detail=detail))
-        #         if progress is not None else None
-        #     ),
-        # )
-        normal_cache = FastSparseCudaCache(
-            source_paths=[
-                os.path.join(normal_nx_zarr_path, group),
-                os.path.join(normal_ny_zarr_path, group),
-            ],
-            shape_zyx=reference_shape,
+        normal_cache = ResidentBrickPool(
+            normal_sidecar,
             origin_zyx=(z_lo, 0, 0),
-            budget_bytes=cache_budget_bytes("normals", device),
+            z_roi=(z_lo, z_hi),
             device=device,
-            label="lasagna normals",
+            label='lasagna normals',
+            expected_channels=2,
+            progress_callback=(
+                (lambda current, total, detail: progress.update(
+                    current, total_steps=total, detail=detail))
+                if progress is not None else None
+            ),
         )
+        # normal_cache = FastSparseCudaCache(
+        #     source_paths=[
+        #         os.path.join(normal_nx_zarr_path, group),
+        #         os.path.join(normal_ny_zarr_path, group),
+        #     ],
+        #     shape_zyx=reference_shape,
+        #     origin_zyx=(z_lo, 0, 0),
+        #     budget_bytes=cache_budget_bytes("normals", device),
+        #     device=device,
+        #     label="lasagna normals",
+        # )
     grad_cache = None
     if use_spacing:
         if progress is not None:
             progress.begin(
                 'loading', 'Loading gradient volume onto GPU',
                 step=0, total_steps=0, unit='bricks')
-        # grad_cache = ResidentBrickPool(
-        #     grad_sidecar,
-        #     origin_zyx=(z_lo, 0, 0),
-        #     z_roi=(z_lo, z_hi),
-        #     device=device,
-        #     label='lasagna grad_mag',
-        #     expected_channels=1,
-        #     expected_shape_zyx=reference_shape,
-        #     progress_callback=(
-        #         (lambda current, total, detail: progress.update(
-        #             current, total_steps=total, detail=detail))
-        #         if progress is not None else None
-        #     ),
-        # )
-        grad_cache = FastSparseCudaCache(
-            source_paths=[
-                os.path.join(grad_mag_zarr_path, group),
-            ],
-            shape_zyx=reference_shape,
+        grad_cache = ResidentBrickPool(
+            grad_sidecar,
             origin_zyx=(z_lo, 0, 0),
-            budget_bytes=cache_budget_bytes("grad_mag", device),
+            z_roi=(z_lo, z_hi),
             device=device,
-            label="lasagna grad_mag",
+            label='lasagna grad_mag',
+            expected_channels=1,
+            expected_shape_zyx=reference_shape,
+            progress_callback=(
+                (lambda current, total, detail: progress.update(
+                    current, total_steps=total, detail=detail))
+                if progress is not None else None
+            ),
         )
+        # grad_cache = FastSparseCudaCache(
+        #     source_paths=[
+        #         os.path.join(grad_mag_zarr_path, group),
+        #     ],
+        #     shape_zyx=reference_shape,
+        #     origin_zyx=(z_lo, 0, 0),
+        #     budget_bytes=cache_budget_bytes("grad_mag", device),
+        #     device=device,
+        #     label="lasagna grad_mag",
+        # )
     return {
         'backend': 'sparse_cuda',
         'store': SparseLasagnaStore(
@@ -431,38 +431,38 @@ def prepare_surf_sdt_volume(
     }
 
     shape = (z_hi - z_lo, int(array.shape[1]), int(array.shape[2]))
-    # from sparse_cuda_cache import ResidentBrickPool, SparseScalarStore
-    from fast_cache import FastSparseCudaCache
-    from sparse_cuda_cache_7769da8 import SparseScalarStore, cache_budget_bytes
+    from sparse_cuda_cache import ResidentBrickPool, SparseScalarStore
+    # from fast_cache import FastSparseCudaCache
+    # from sparse_cuda_cache_7769da8 import SparseScalarStore, cache_budget_bytes
     sidecar = _require_sidecar(sdt_zarr_path, group_name, label='surf_sdt')
     if progress is not None:
         progress.begin(
             'loading', 'Loading surface-distance volume onto GPU',
             step=0, total_steps=0, unit='bricks')
-    # cache = ResidentBrickPool(
-    #     sidecar,
-    #     origin_zyx=(z_lo, 0, 0),
-    #     z_roi=(z_lo, z_hi),
-    #     device=torch.device('cuda'),
-    #     label='surf_sdt',
-    #     expected_channels=1,
-    #     expected_shape_zyx=tuple(int(v) for v in array.shape),
-    #     progress_callback=(
-    #         (lambda current, total, detail: progress.update(
-    #             current, total_steps=total, detail=detail))
-    #         if progress is not None else None
-    #     ),
-    # )
-    cache = FastSparseCudaCache(
-        source_paths=[
-            os.path.join(sdt_zarr_path, group_name),
-        ],
-        shape_zyx=tuple(int(v) for v in array.shape),
+    cache = ResidentBrickPool(
+        sidecar,
         origin_zyx=(z_lo, 0, 0),
-        budget_bytes=cache_budget_bytes("sdt", torch.device("cuda")),
-        device=torch.device("cuda"),
-        label="surf_sdt",
+        z_roi=(z_lo, z_hi),
+        device=torch.device('cuda'),
+        label='surf_sdt',
+        expected_channels=1,
+        expected_shape_zyx=tuple(int(v) for v in array.shape),
+        progress_callback=(
+            (lambda current, total, detail: progress.update(
+                current, total_steps=total, detail=detail))
+            if progress is not None else None
+        ),
     )
+    # cache = FastSparseCudaCache(
+    #     source_paths=[
+    #         os.path.join(sdt_zarr_path, group_name),
+    #     ],
+    #     shape_zyx=tuple(int(v) for v in array.shape),
+    #     origin_zyx=(z_lo, 0, 0),
+    #     budget_bytes=cache_budget_bytes("sdt", torch.device("cuda")),
+    #     device=torch.device("cuda"),
+    #     label="surf_sdt",
+    # )
     fingerprint['respool_ct_mask'] = cache.meta.get('ct_mask')
     common = {
         'kind': volume_kind,
