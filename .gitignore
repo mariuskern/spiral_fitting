@@ -1,7 +1,9 @@
-villa/fit_out
+fit_out
 .env
 .vscode
 out
+data
+checkpoints
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

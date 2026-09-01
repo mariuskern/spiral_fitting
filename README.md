@@ -21,7 +21,7 @@ The repository combines code from multiple sources:
 
     pip install uv
     uv pip install torch torchvision
-    uv pip install -e villa
+    uv pip install -e spiral
     uv pip install python-dotenv
     ```
 
@@ -118,8 +118,8 @@ The repository combines code from multiple sources:
     ln -s ~/bin/vc ~/bin/vc_obj_uv_lift
     ```
 
-
 5. `export PATH=$HOME/bin:$PATH`
+
 
 ## Getting started with `render_ink.py`
 
@@ -130,3 +130,20 @@ The python environment should already have been created.
     ```bash
     wget https://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/volumes_zarr_standardized/54keV_7.91um_Scroll1B.7z
     ```
+
+
+## Getting started with surface detection
+
+1. Create python environment as described in `Getting Started`
+
+2. Install surface detection dependencies
+
+    ```bash
+    uv pip install -r .\surface_detection\requirements.txt
+    uv pip install "numpy<=2.4"
+    conda install numba
+    ```
+
+3. Download data from kaggle [here](https://www.kaggle.com/competitions/vesuvius-challenge-surface-detection/data)
+
+4. Download both checkpoints from kaggel [here](https://www.kaggle.com/code/mariusheuser/local-interpolation-interference/input)
