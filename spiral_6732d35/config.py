@@ -10,6 +10,8 @@ _ENUMS = {
     "model_flow_integration_solver": ["rk4"],
     "model_flow_field_type": ["cartesian", "cylindrical"],
     "patch_strip_sampling": ["straight", "dijkstra"],
+    "pcl_patch_linking_backend": ["original", "fast"],
+    "input_sparse_cuda_cache_backend": ["original", "fast"],
     "track_crossing_mode": ["count", "track_walk"],
     "track_radius_target": ["mean", "median"],
     "dense_spacing_mode": ["phase", "grad_mag", "winding_model"],
@@ -296,6 +298,9 @@ class Config:
         self.patch_sampling_area_exponent = 0.5
         self.patch_erode_patches = 1
         self.input_disable_patches = False
+        # ``original`` uses resident sidecar pools; ``fast`` uses the legacy
+        # bounded cache accelerated by fast_cache.FastSparseCudaCache.
+        self.input_sparse_cuda_cache_backend = "fast"
         # When set, only patch directory entries (uuid-named) whose name
         # matches this regex (re.search) are loaded; None loads everything.
         self.patch_uuid_filter_regex = None
@@ -307,6 +312,9 @@ class Config:
         self.patch_unverified_patch_dt_loss_margin = 0.025
         self.patch_unverified_patch_exclusion_radius = 64.0
         self.pcl_rel_winding_adjacent_patches_only = True
+        # ``fast`` uses fast_link's spatial prefilter for the Python fallback;
+        # ``original`` keeps point_collection's historical implementation.
+        self.pcl_patch_linking_backend = "fast"
         self.pcl_stratified_pcl_sampling = True
         self.pcl_sampling_weights = None
         self.pcl_fiber_min_point_spacing = 40.0
@@ -397,8 +405,10 @@ class Config:
         # sampling a chain walk through a link component in the
         # unattached-strip loss.
         self.loss_fiber_link_branch_probability = 0.5
-        self.loss_weight_track_radius = 50.0
-        self.loss_weight_track_dt = 10.0
+        # self.loss_weight_track_radius = 50.0
+        # self.loss_weight_track_dt = 10.0
+        self.loss_weight_track_radius = 0
+        self.loss_weight_track_dt = 0
         self.loss_weight_sym_dirichlet = 10.0
         self.loss_weight_dense_normals = 100.0
         self.loss_weight_dense_spacing = 12.0

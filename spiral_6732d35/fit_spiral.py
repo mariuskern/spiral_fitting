@@ -24,6 +24,7 @@ import scipy.ndimage
 import torch.nn.functional as F
 from scipy.spatial import cKDTree
 from tqdm import tqdm
+# from dataclasses import replace
 
 from ddp_helpers import (
     StepTimer,
@@ -47,6 +48,7 @@ from native_spiral import load_native_spiral_sampling
 from tifxyz import load_tifxyz
 from geom_utils import bilinear_atlas_lookup, interp1d
 from point_collection import (
+    # link_points_to_patches as _original_link_points_to_patches,
     link_points_to_patches,
     load_point_collection,
     normalise_pcl_winding_annotations,
@@ -741,6 +743,21 @@ def _mask_unverified_patches_near_trusted_geometry(
     return kept_unverified_patches, n_masked_vertices, n_dropped_patches
 
 
+# def _link_points_to_patches(config, *args, **kwargs):
+#     """Run the point-to-patch linker selected for this fit.
+
+#     The original backend remains the default.  The fast implementation is
+#     imported lazily so the normal path has no dependency on ``fast_link``.
+#     """
+#     backend = config["pcl_patch_linking_backend"]
+#     if backend == "fast":
+#         from fast_link import link_points_to_patches as fast_link_points_to_patches
+#         return fast_link_points_to_patches(*args, **kwargs)
+#     if backend == "original":
+#         return _original_link_points_to_patches(*args, **kwargs)
+#     raise ValueError(f"unsupported pcl_patch_linking_backend: {backend!r}")
+
+
 class FitContext:
     """Owner of all mutable state and resources for one spiral fit.
 
@@ -835,7 +852,9 @@ class FitContext:
         self.verified_patches_path = paths.verified_patches or None
         self.unverified_patches_path = paths.unverified_patches or None
         self.shell_path = paths.outer_shell or None
-        self.tracks_dbm_path = paths.tracks_dbm or None
+        # self.tracks_dbm_path = paths.tracks_dbm or None
+        # self.tracks_dbm_path = paths.tracks_dbm or None
+        self.tracks_dbm_path = (paths.tracks_dbm or None if (config['loss_weight_track_radius'] > 0 or config['loss_weight_track_dt'] > 0) else None)
         self.pcl_input_specs = [
             (spec.path, spec.role.value if spec.role is not None else None)
             for spec in paths.pcls
@@ -1243,6 +1262,15 @@ class FitContext:
             detail=(
                 f'{len(point_collections):,} collections, '
                 f'{len(verified_patches):,} patches'))
+        # _link_points_to_patches(
+        #     self.config,
+        #     verified_patches,
+        #     point_collections,
+        #     tolerance=link_distance_tolerance,
+        #     surface_index_tolerance=link_distance_tolerance,
+        #     distance_scale=1.0,
+        #     general_hit_policy='largest_area',
+        # )
         link_points_to_patches(
             verified_patches,
             point_collections,
@@ -1921,6 +1949,7 @@ class FitContext:
             lasagna_scale=self.lasagna_scale,
             storage_backend=self.lasagna_storage_backend,
             cache_directory=self.cache_path,
+            cache_backend=self.config["input_sparse_cuda_cache_backend"],
             progress=progress,
         )
         if interactive_driver is not None and self.lasagna_volume:
@@ -1947,6 +1976,7 @@ class FitContext:
                 z_end=self.z_end,
                 cache_directory=self.cache_path,
                 storage_backend=self.lasagna_storage_backend,
+                cache_backend=self.config["input_sparse_cuda_cache_backend"],
                 progress=progress,
             )
             if interactive_driver is not None:
@@ -3078,6 +3108,15 @@ class FitContext:
                             [point['p'][2], point['p'][1], point['p'][0]],
                             dtype=np.float32)
                     pcl['chain'] = SequenceChain(pcl)
+                # _link_points_to_patches(
+                #     self.config,
+                #     self.verified_patches,
+                #     new_collections,
+                #     tolerance=self.link_distance_tolerance,
+                #     surface_index_tolerance=self.link_distance_tolerance,
+                #     distance_scale=1.0,
+                #     general_hit_policy='largest_area',
+                # )
                 link_points_to_patches(
                     self.verified_patches,
                     new_collections,
@@ -4009,10 +4048,15 @@ if __name__ == '__main__':
         help='Directory for derived host caches, shared with the interactive '
              'service (default: $FIT_SPIRAL_CACHE_DIR if set, else '
              '$XDG_CACHE_HOME/vc3d/spiral, i.e. ~/.cache/vc3d/spiral)')
+    # parser.add_argument(
+    #     '--no-tracks', action='store_true',
+    #     help='Run without loading the optional track DBM or using track losses')
     cli_args = parser.parse_args()
 
     scroll_spec = load_scroll_spec(cli_args.dataset, cli_args.scroll_spec)
     input_paths = conventional_input_paths(cli_args.dataset, scroll_spec)
+    # if cli_args.no_tracks:
+    #     input_paths = replace(input_paths, tracks_dbm='')
 
     # The CLI is a torchrun rendezvous boundary: this is where RANK /
     # WORLD_SIZE / LOCAL_RANK are read, once, into an explicit context that is

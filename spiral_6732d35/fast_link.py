@@ -553,3 +553,114 @@ def link_collection_to_patch_subset(
                 nearest_ij.tolist(),
             )
 
+
+# # ---------------------------------------------------------------------------
+# # Threaded execution: capture upstream's serial per-collection calls, run them
+# # on a pool, merge in the original call order.
+# # ---------------------------------------------------------------------------
+# #
+# # Upstream's fallback loops over 14k collections serially, one core busy out of
+# # 32. Each captured call is independent (it writes only its own collection's
+# # points plus a private local links dict), so they parallelise cleanly; merging
+# # the local results in *capture order* reproduces the serial links structure
+# # exactly -- same lists, same order -- so this changes wall-clock, not output.
+
+# # Keep a direct reference so callers can select the fast implementation
+# # without globally monkey-patching point_collection (resident fits may use
+# # different linking backends in the same Python process).
+# _UPSTREAM_LPTP = _pc.link_points_to_patches
+# _ORIGINAL_LPTP = None
+
+
+# def _worker_thread_count() -> int:
+#     override = os.environ.get('FIT_SPIRAL_LINK_THREADS')
+#     if override:
+#         try:
+#             if int(override) > 0:
+#                 return int(override)
+#         except ValueError:
+#             pass
+#     # Measured 2026-07-29 on the 600-patch/10-collection sample: 24 workers ran
+#     # 7.6x SLOWER than serial (GIL thrash over fine-grained numpy/torch glue).
+#     # Per-patch batching is where the speed comes from; keep this serial unless
+#     # someone explicitly experiments via the env var.
+#     return 1
+
+
+# def link_points_to_patches(*args: Any, **kwargs: Any):
+#     """Fast, output-equivalent point-to-patch linking.
+
+#     Unlike :func:`install`, this is safe to call alongside the original
+#     ``point_collection.link_points_to_patches`` in one Python process.
+#     """
+#     captured: List[Tuple] = []
+
+#     def capture(links, collection_id, collection, candidate_patches,
+#                 tolerance, hit_policy='nearest'):
+#         captured.append((links, collection_id, collection, candidate_patches,
+#                          tolerance, hit_policy))
+
+#     previous = _pc._link_collection_to_patch_subset
+#     _pc._link_collection_to_patch_subset = capture
+#     try:
+#         links = _UPSTREAM_LPTP(*args, **kwargs)
+#     finally:
+#         _pc._link_collection_to_patch_subset = previous
+
+#     if not captured:
+#         return links
+
+#     # Prebuild the shared patch index once, not 24 times under a lock.
+#     for _, _, _, candidate_patches, tolerance, _ in captured:
+#         if len(candidate_patches) >= _INDEX_MIN_PATCHES:
+#             _patch_index_for(candidate_patches, float(tolerance))
+#             break
+
+#     def run_one(item):
+#         target_links, collection_id, collection, candidate_patches, tolerance, hit_policy = item
+#         local: Dict[str, List[Any]] = {}
+#         link_collection_to_patch_subset(
+#             local, collection_id, collection, candidate_patches,
+#             tolerance, hit_policy=hit_policy)
+#         return target_links, local
+
+#     workers = _worker_thread_count()
+#     progress = getattr(_pc, 'tqdm', None)
+
+#     # The per-call tensor work is tiny after prefiltering; intra-op torch
+#     # threading would only thrash against the outer pool.
+#     old_torch_threads = torch.get_num_threads()
+#     torch.set_num_threads(1)
+#     try:
+#         with ThreadPoolExecutor(max_workers=workers) as pool:
+#             results = pool.map(run_one, captured)
+#             if progress is not None:
+#                 results = progress(results, 'linking points to patches (threaded)',
+#                                    total=len(captured))
+#             for target_links, local in results:  # map() preserves capture order
+#                 for patch_id, patch_links in local.items():
+#                     target_links.setdefault(patch_id, []).extend(patch_links)
+#     finally:
+#         torch.set_num_threads(old_torch_threads)
+
+#     return links
+
+
+# # Compatibility name for launchers using install().
+# _threaded_link_points_to_patches = link_points_to_patches
+
+
+# def install() -> None:
+#     """Rebind the upstream fallback to the prefiltered, threaded version."""
+#     global _ORIGINAL_LPTP
+#     for name in ('_link_collection_to_patch_subset', 'link_points_to_patches',
+#                  '_record_point_patch_link'):
+#         if not hasattr(_pc, name):
+#             raise RuntimeError(
+#                 f'point_collection.{name} is gone; upstream restructured the '
+#                 'linking fallback -- re-check fast_link rather than silently '
+#                 'running unpatched')
+#     _pc._link_collection_to_patch_subset = link_collection_to_patch_subset
+#     if _ORIGINAL_LPTP is None:
+#         _ORIGINAL_LPTP = _pc.link_points_to_patches
+#         _pc.link_points_to_patches = _threaded_link_points_to_patches
