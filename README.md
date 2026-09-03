@@ -43,6 +43,14 @@ The repository combines code from multiple sources:
 
     The helper scripts `fast_spiral_fit/fetch_roi.py` and `fast_spiral_fit/fetch_tree.py` can be used to download the dataset. Set the `LOCAL` constant at the beginning of each script to the desired dataset location before running it.
 
+    ```bash
+    python ./download_data/fetch_roi.py 4000 17000
+
+    python ./download_data/fetch_tree.py --list --manifest m.jsonl verified_patches unverified_patches
+    python ./download_data/fetch_tree.py --download --manifest m.jsonl --shard 0:4 --jobs 32
+    python ./download_data/fetch_tree.py --direct outer_shell fibers tracks abs_winding.json patch-overlap-pcls.json relative_windings.json same_windings.json umbilicus.json
+    ```
+
 <!-- 3. Create a `.env` file in the project root and define the following environment variables:
 
     ```bash
@@ -140,7 +148,7 @@ The python environment should already have been created.
 2. Install surface detection dependencies
 
     ```bash
-    uv pip install -r .\surface_detection\requirements.txt
+    uv pip install -r ./surface_detection/requirements.txt
     uv pip install "numpy<=2.4"
     conda install numba
     ```
