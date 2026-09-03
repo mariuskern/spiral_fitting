@@ -90,7 +90,7 @@ The repository combines code from multiple sources:
     python spiral_6732d35/fit_spiral.py --dataset <path_to_dataset> --scroll-spec <path_to_scroll_spec> # For the 6732d35 version
     ```
 
-    The scroll spec should be provided as a JSON file. The `--scroll-spec` argument is optional if a `scroll-spec.json` file is present in the dataset folder.
+    The scroll spec should be provided as a JSON file. The `--scroll-spec` argument is optional if a `spiral-scroll.json` file is present in the dataset folder.
 
     The file should contain the following line. The `paths` key is optional.
 
@@ -195,3 +195,7 @@ The python environment should already have been created.
 3. Download data from kaggle [here](https://www.kaggle.com/competitions/vesuvius-challenge-surface-detection/data)
 
 4. Download both checkpoints from kaggel [here](https://www.kaggle.com/code/mariusheuser/local-interpolation-interference/input)
+
+5. Run each cell in the notebook.
+
+6. Visualize the results using the [ScrollSlabViewer](https://paul-g2.github.io/ScrollSlabViewer/).
