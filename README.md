@@ -24,6 +24,8 @@ The repository combines code from multiple sources:
     uv pip install torch torchvision
     uv pip install -e spiral
     uv pip install python-dotenv
+
+    conda install -c conda-forge p7zip # For unpacking the scroll archives
     ```
 
 2. Download the dataset:
@@ -41,7 +43,7 @@ The repository combines code from multiple sources:
 
     https://huggingface.co/buckets/scrollprize/datasets/tree/spiral/PHercParis4
 
-    The helper scripts `fast_spiral_fit/fetch_roi.py` and `fast_spiral_fit/fetch_tree.py` can be used to download the dataset. Set the `LOCAL` constant at the beginning of each script to the desired dataset location before running it.
+    The helper scripts `download_data/fetch_roi.py` and `download_data/fetch_tree.py` can be used to download the dataset. Set the `LOCAL` constant at the beginning of each script to the desired dataset location before running it.
 
     ```bash
     python ./download_data/fetch_roi.py 4000 17000
@@ -84,6 +86,24 @@ The repository combines code from multiple sources:
 
     ```bash
     python spiral/fit_spiral.py
+
+    python spiral_6732d35/fit_spiral.py --dataset <path_to_dataset> --scroll-spec <path_to_scroll_spec> # For the 6732d35 version
+    ```
+
+    The scroll spec should be provided as a JSON file. The `--scroll-spec` argument is optional if a `scroll-spec.json` file is present in the dataset folder.
+
+    The file should contain the following line. The `paths` key is optional.
+
+    ```json
+    {
+        "schema_version": 1,
+        "name": "PHercParis4",
+        "voxel_size_um": 0.08,
+        "spiral_outward_sense": "CW",
+        "paths": {
+            "tracks_dbm": "<path>" # optional
+        }
+    }
     ```
 
 ## Installing the VC binaries
@@ -130,7 +150,7 @@ The repository combines code from multiple sources:
 5. `export PATH=$HOME/bin:$PATH`
 
 
-## Getting started with `render_ink.py`
+<!-- ## Getting started with `render_ink.py`
 
 The python environment should already have been created.
 
@@ -139,6 +159,25 @@ The python environment should already have been created.
     ```bash
     wget https://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/volumes_zarr_standardized/54keV_7.91um_Scroll1B.7z
     ```
+
+2. Unpack the dataset
+
+    ```bash
+    7z x 54keV_7.91um_Scroll1B.7z 
+    ```
+
+    Optional: Use `tar.zst` for faster unpacking:
+
+    ```bash
+    tar -I 'zstd -T0' -cf <dataset>.tar.zst <dataset>/
+    tar -I 'zstd -T0' -xf <dataset>.tar.zst
+    ```
+
+3. Run `render_ink.py`
+
+    ```bash
+    python spiral/render_ink.py --volume <path_to_dataset> <path_to_fit_spiral_output>/meshes/fitted/ --lasagna-dir spiral/lasagna
+    ``` -->
 
 
 ## Getting started with surface detection
