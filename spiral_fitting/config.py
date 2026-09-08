@@ -302,13 +302,13 @@ class Config:
         # effect list). Defaults match the historical fit_spiral module
         # globals for the production PHercParis4 dataset.
         self.z_begin = 4000
-        self.z_end = 17000
+        self.z_end = 5000 # 17000
         self.optimizer_random_seed = 1
         self.optimizer_distributed_split_batch = True
         self.optimizer_learning_rate = 3e-05
         self.optimizer_exp_lr_schedule = True
         self.optimizer_lr_final_factor = 0.3
-        self.optimizer_num_training_steps = 30000
+        self.optimizer_num_training_steps = 5000 # 30000
         self.model_num_flow_integration_steps = 3
         self.model_flow_integration_solver = "rk4"
         self.model_num_flow_timesteps = 1
@@ -449,7 +449,7 @@ class Config:
         self.dense_grad_mag_encode_scale = 1000.0
         self.dense_grad_mag_factor = 0.25
         self.dense_spacing_integration_steps = 8
-        self.dense_spacing_mode = "winding_model"
+        self.dense_spacing_mode = "phase" # "winding_model"
         self.winding_model_relative_pair_delta = [3, 15]
         self.winding_model_huber_delta = 0.5
         self.dense_spacing_pair_m_short = [
