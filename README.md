@@ -7,9 +7,9 @@ This repository contains the code and configuration required to run the Spiral F
 The repository combines code from multiple sources:
 
 - [**7jycwjmbfn-eng/spiral-fit-consumer-gpu**](https://github.com/7jycwjmbfn-eng/spiral-fit-consumer-gpu/commit/f189740211f462193973055a32e3269c03301587) (Commit: f189740)
-- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/7769da8cf2233310570608feecc127066a7c0c7c/volume-cartographer/scripts/spiral) (Commit: 7769da8) (spiral)
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/7769da8cf2233310570608feecc127066a7c0c7c/volume-cartographer/scripts/spiral) (Commit: 7769da8) (`spiral_fitting/spiral_7769da8`)
 - [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/blob/9761f14773a3ed41f2459bbf689a8f1998a656ed/volume-cartographer/scripts/spiral/spiral_progress.py) (Commit: 9761f14) (only `villa/spiral_progress.py`)
-- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/6732d3587bc3224a8a69a15886fb68c6e57a9342/volume-cartographer/scripts/spiral) (Commit: 6732d35) (spiral_6732d35, doesn't work yet)
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/6732d3587bc3224a8a69a15886fb68c6e57a9342/volume-cartographer/scripts/spiral) (Commit: 6732d35) (`spiral_fitting/spiral_6732d35`, doesn't work yet)
 - [**Vesuvius Challenge - Surface Detection (2nd Place)**](https://www.kaggle.com/competitions/vesuvius-challenge-surface-detection/writeups/2nd-place-solution-vesuvius-challenge-a-postproc) ([challenge](https://www.kaggle.com/competitions/vesuvius-challenge-surface-detection/overview), [notebook](https://www.kaggle.com/code/mariusheuser/local-interpolation-interference))
 
 ## Getting Started
@@ -77,7 +77,7 @@ The repository combines code from multiple sources:
 
 4. Adjust the fitting configuration
 
-    Before running the pipeline, edit the configuration at the beginning of `villa/fit_spiral.py`:
+    Before running the pipeline, edit the configuration at the beginning of `spiral_fitting/spiral_7769da8/fit_spiral.py`:
 
     - Around **line 150**: set the required variables.
     - Around **line 160**: adjust the `default_config` as needed for your experiment.
@@ -85,9 +85,9 @@ The repository combines code from multiple sources:
 5. Run the pipeline
 
     ```bash
-    python spiral/fit_spiral.py
+    python spiral_fitting/spiral_7769da8/fit_spiral.py
 
-    python spiral_6732d35/fit_spiral.py --dataset <path_to_dataset> --scroll-spec <path_to_scroll_spec> # For the 6732d35 version
+    python spiral_fitting/spiral_6732d35/fit_spiral.py --dataset <path_to_dataset> --scroll-spec <path_to_scroll_spec> # For the 6732d35 version
     ```
 
     The scroll spec should be provided as a JSON file. The `--scroll-spec` argument is optional if a `spiral-scroll.json` file is present in the dataset folder.
