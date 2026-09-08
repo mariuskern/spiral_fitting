@@ -19,6 +19,7 @@ The original, unmodified code can be found in `original_code/`.
     ```bash
     pip install uv
     uv pip install -r requirements.txt
+    uv pip install torch torchvision
     uv pip install "numpy<=2.4"
     uv pip install numba
     ```
@@ -27,6 +28,10 @@ The original, unmodified code can be found in `original_code/`.
 
 3. Download both checkpoints from kaggel [here](https://www.kaggle.com/code/mariusheuser/local-interpolation-interference/input)
 
-4. Run each cell in the notebook.
+4. Run surface detection
+
+    ```bash
+    python main.py
+    ```
 
 5. Visualize the results using the [ScrollSlabViewer](https://paul-g2.github.io/ScrollSlabViewer/).

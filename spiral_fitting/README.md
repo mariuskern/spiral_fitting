@@ -99,3 +99,33 @@ This folder attempts to combine a newer version of the spiral-fitting code from 
         }
     }
     ```
+
+
+## Getting started with `render_ink.py`
+
+The python environment should have already been as described in `Getting Started`.
+
+1. Download the dataset:
+
+    ```bash
+    wget https://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/volumes_zarr_standardized/54keV_7.91um_Scroll1B.7z
+    ```
+
+2. Unpack the dataset
+
+    ```bash
+    7z x 54keV_7.91um_Scroll1B.7z 
+    ```
+
+    Optional: Use `tar.zst` for faster unpacking:
+
+    ```bash
+    tar -I 'zstd -T0' -cf <dataset>.tar.zst <dataset>/
+    tar -I 'zstd -T0' -xf <dataset>.tar.zst
+    ```
+
+3. Run `render_ink.py`
+
+    ```bash
+    python spiral/render_ink.py --volume <path_to_dataset> <path_to_fit_spiral_output>/meshes/fitted/ --lasagna-dir spiral/lasagna
+    ```
