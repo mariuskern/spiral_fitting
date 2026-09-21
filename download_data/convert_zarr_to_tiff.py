@@ -1,6 +1,7 @@
 import argparse
 import shutil
 from pathlib import Path
+import json
 
 import numpy as np
 import tifffile
@@ -130,6 +131,35 @@ def convert_zarr(input_dir, output_dir, array, prefix, digits, overwrite, compre
     # Convert slices
     # --------------------------------------------------------
 
+    # import tifffile
+
+    # path = output_dir / f"{output_dir.name}.tif"
+    # # path = r"data\surface_detection\test_images\1407735.tif"
+
+    # with tifffile.TiffFile(path) as tif:
+    #     print("Pages:", len(tif.pages))
+    #     print("Series:", len(tif.series))
+
+    #     print("imagej_metadata:", tif.imagej_metadata)
+    #     print("ome_metadata:", tif.ome_metadata)
+    #     print("shaped_metadata:", tif.shaped_metadata)
+
+    #     print("description:", repr(tif.pages[0].description))
+    #     # for page in tif.pages[1:]:
+    #     #     print("description:", repr(page.description))
+
+    #     # for i, series in enumerate(tif.series):
+    #     #     print(f"Series {i}:")
+    #     #     print("  shape:", series.shape)
+    #     #     print("  axes:", series.axes)
+
+    #     page = tif.pages[0]
+
+    #     for tag in page.tags.values():
+    #         print(f"{tag.code:5d}  {tag.name:25s}  {tag.value!r}")
+
+    # exit()
+
     tif = tifffile.TiffWriter(output_dir / f"{output_dir.name}.tif", bigtiff=True)
 
     for i in tqdm(range(d), desc=f"Converting", unit="slice"):
@@ -157,7 +187,8 @@ def convert_zarr(input_dir, output_dir, array, prefix, digits, overwrite, compre
             raise
 
         tifffile.imwrite(output_file, image, compression=compression, bigtiff=True)
-        tif.write(image)
+        tif.write(image, contiguous=True)
+        # tif.write(image, compression=compression, metadata={"shape": list(volume.shape)}, description=json.dumps({"shape": list(volume.shape)}) if i == 0 else None)
 
     tif.close()
 

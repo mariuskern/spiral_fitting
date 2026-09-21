@@ -10,7 +10,7 @@ config = {
     "model2_checkpoint": "checkpoint_final.pth",
     "model2_device": "cuda",
 
-    "input_dir": "../data/surface_detection/test_images",
+    "input_dir": "../data/332/volume",
     "output_zip": "submission.zip"
 }
 
