@@ -6,3 +6,11 @@
 python download_zarr_from_url.py <url_to_zarr> <output_path> --region <z_start> <z_stop> <y_start> <y_stop> <x_start> <x_stop> --array <array>
 python convert_zarr_to_tiff.py path/to/zarr <output_path> --array <array>
 ```
+
+## Convert a tiff image stack to a zarr volume
+
+Use `utils/tiff_to_zarr.py` to convert a tiff image stack to a zarr volume
+
+```bash
+python utils/tiff_to_zarr.py <input.tiff> <output.zarr> --mul 255
+```
