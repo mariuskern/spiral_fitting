@@ -1,5 +1,5 @@
 /* Parameters shared by several programs */
-#define OUTPUT_DIR "d:/pipelineOutput"
+#define OUTPUT_DIR "out"
 #define VOL_OFFSET_X 0
 #define VOL_OFFSET_Y 0
 #define VOL_OFFSET_Z 0
@@ -9,18 +9,18 @@
 #define QUADMESH_SIZE 4
 #define VOXEL_SIZE 9
 #define RANDOM_SEED 124
-#define VOLUME_ZARR "d:/zarrs/PHerc0139/volume/2"
-#define SURFACE_ZARR "d:/zarrs/PHerc0139/surface/0"
+#define VOLUME_ZARR "/mnt/c/Users/mariu/Documents/Arbeit/spiral fitting/repo/data/332/volume/332.zarr"
+#define SURFACE_ZARR "/mnt/c/Users/mariu/Documents/Arbeit/spiral fitting/repo/data/332/332_surface_prediction.zarr"
 /* The initial seed point */
-#define SEED_X 4052
-#define SEED_Y 2763
-#define SEED_Z 10487
-#define SEED_AXIS1_X 1
-#define SEED_AXIS1_Y 0
-#define SEED_AXIS1_Z 0
-#define SEED_AXIS2_X 0
-#define SEED_AXIS2_Y 0
-#define SEED_AXIS2_Z 1
+#define SEED_X 297
+#define SEED_Y 412
+#define SEED_Z 110
+#define SEED_AXIS1_X 0.387194224
+#define SEED_AXIS1_Y -0.228318299
+#define SEED_AXIS1_Z -0.893281248
+#define SEED_AXIS2_X 0.384993948
+#define SEED_AXIS2_Y -0.840308956
+#define SEED_AXIS2_Z 0.381654973
 /* Parameters used by the patch growing program */
 #define MIN_PATCH_ITERS 45
 #define MAX_GROWTH_STEPS 125

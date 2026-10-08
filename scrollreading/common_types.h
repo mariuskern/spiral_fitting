@@ -1,7 +1,13 @@
+// Modified in October 2026 to explicitly include <cstdint> for the uint32_t
+// type used by the Patch colourGrid member and related colour grid methods.
+
+
+
 #pragma once
 
 #include <vector>
 #include <map>
+#include <cstdint>
 
 using namespace std;
 

@@ -7,6 +7,11 @@
 #
 # The generated parameters.py and parameters.h files contain the effective
 # configuration after applying these environment variable overrides.
+#
+# Modified in October 2026 to allow environment variable overrides to use
+# floating-point values even when the corresponding value in parameters.json
+# is an integer. Numeric environment values are converted to int when
+# possible and to float otherwise.
 
 
 import json
@@ -25,13 +30,13 @@ def get_value(key, value):
 
     if env_value is None:
         return value
-
     if isinstance(value, bool):
         return env_value.lower() in ("1", "true", "yes", "on")
-    elif isinstance(value, int):
-        return int(env_value)
-    elif isinstance(value, float):
-        return float(env_value)
+    elif isinstance(value, (int, float)):
+        if "." in env_value:
+            return float(env_value)
+        else:
+            return int(env_value)
     else:
         return env_value
 

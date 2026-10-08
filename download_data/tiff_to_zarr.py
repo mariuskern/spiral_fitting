@@ -9,7 +9,7 @@ from numcodecs import Blosc
 
 def _get_arguments():
     parser = argparse.ArgumentParser(
-        description="Convert all downloaded Zarr segments into TIFF stacks while preserving the directory structure."
+        description="Convert tiff to zarr."
     )
 
     parser.add_argument(

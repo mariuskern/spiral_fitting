@@ -1,5 +1,5 @@
 # Parameters shared by several programs
-OUTPUT_DIR="d:/pipelineOutput"
+OUTPUT_DIR="out"
 VOL_OFFSET_X=0
 VOL_OFFSET_Y=0
 VOL_OFFSET_Z=0
@@ -9,18 +9,18 @@ VOL_SIZE_Z=20974
 QUADMESH_SIZE=4
 VOXEL_SIZE=9
 RANDOM_SEED=124
-VOLUME_ZARR="d:/zarrs/PHerc0139/volume/2"
-SURFACE_ZARR="d:/zarrs/PHerc0139/surface/0"
+VOLUME_ZARR="/mnt/c/Users/mariu/Documents/Arbeit/spiral fitting/repo/data/332/volume/332.zarr"
+SURFACE_ZARR="/mnt/c/Users/mariu/Documents/Arbeit/spiral fitting/repo/data/332/332_surface_prediction.zarr"
 # The initial seed point
-SEED_X=4052
-SEED_Y=2763
-SEED_Z=10487
-SEED_AXIS1_X=1
-SEED_AXIS1_Y=0
-SEED_AXIS1_Z=0
-SEED_AXIS2_X=0
-SEED_AXIS2_Y=0
-SEED_AXIS2_Z=1
+SEED_X=297
+SEED_Y=412
+SEED_Z=110
+SEED_AXIS1_X=0.387194224
+SEED_AXIS1_Y=-0.228318299
+SEED_AXIS1_Z=-0.893281248
+SEED_AXIS2_X=0.384993948
+SEED_AXIS2_Y=-0.840308956
+SEED_AXIS2_Z=0.381654973
 # Parameters used by the patch growing program
 MIN_PATCH_ITERS=45
 MAX_GROWTH_STEPS=125

@@ -1,3 +1,9 @@
+# Modified in October 2026 to make the generated configuration depend on the
+# environment file, parse_parameters.py as well as parameters.json, ensuring that changes to
+# environment variable overrides trigger regeneration of parameters.h.
+
+
+
 CC=g++
 CFLAGS=-O3 -Wall -fopenmp
 LFLAGS=-lblosc2 -ltiff -L/usr/local/lib -I/usr/local/include
@@ -62,7 +68,7 @@ erasepoints.o : erasepoints.cpp erasepoints.h bigpatch.h common_types.h paramete
 badpatchfinder.o : badpatchfinder.cpp badpatchfinder.h common_types.h parameters.h
 	$(CC) -c $< $(CFLAGS)
 
-parameters.h : parameters.json
+parameters.h : parameters.json ../.env parse_parameters.py
 	python parse_parameters.py
 
 
