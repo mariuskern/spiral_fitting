@@ -55,9 +55,9 @@ from fit_session import (fit_input, input_source_enabled, pcl_input_enabled,
 
 from dotenv import load_dotenv
 load_dotenv()
-for key in ["FIT_SPIRAL_CONFIG_OVERRIDES"]:
-    if key in os.environ:
-        os.environ[key] = os.path.expandvars(os.environ[key])
+# for key in ["FIT_SPIRAL_CONFIG_OVERRIDES"]:
+#     if key in os.environ:
+#         os.environ[key] = os.path.expandvars(os.environ[key])
 
 
 def _startup_resource_suffix(started_at=None):

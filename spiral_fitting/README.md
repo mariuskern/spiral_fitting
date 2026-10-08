@@ -167,6 +167,7 @@ This folder attempts to combine a newer version of the spiral-fitting code from 
 
     The cache location can be changed using `FIT_SPIRAL_CACHE_DIR` or the `--cache DIR` command-line option.
 
+    > **Note:** Avoid using environment variables in paths, as they may not work correctly in all cases.
 
     <!-- Before running the pipeline, edit the configuration in `config.py`:
 
@@ -237,7 +238,7 @@ This guide installs the VC binaries in your home directory using an Apptainer co
     ```bash
     #!/bin/bash
 
-    IMAGE="$HOME/volume-cartographer.sif"
+    IMAGE="~/volume-cartographer.sif"
 
     exec apptainer exec "$IMAGE" "$(basename "$0")" "$@"
     ```
@@ -255,7 +256,7 @@ This guide installs the VC binaries in your home directory using an Apptainer co
 
     Create a symlink for each binary you want to use:
 
-    ```bash
+    <!-- ```bash
     cd ~/bin
 
     ln -s vc vc_render_tifxyz
@@ -264,6 +265,27 @@ This guide installs the VC binaries in your home directory using an Apptainer co
     ln -s vc flatboi
     ln -s vc vc_obj2tifxyz
     ln -s vc vc_obj_uv_lift
+    ``` -->
+
+    <!-- ```bash
+    ln -s ~/bin/vc ~/bin/vc_render_tifxyz
+    ln -s ~/bin/vc ~/bin/vc_tifxyz_trim
+    ln -s ~/bin/vc ~/bin/vc_tifxyz2obj
+    ln -s ~/bin/vc ~/bin/flatboi
+    ln -s ~/bin/vc ~/bin/vc_obj2tifxyz
+    ln -s ~/bin/vc ~/bin/vc_obj_uv_lift
+    ``` -->
+
+    ```bash
+    BIN_DIR=~/bin
+    VC_BIN="$BIN_DIR/vc"
+
+    ln -s "$VC_BIN" "$BIN_DIR/vc_render_tifxyz"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_tifxyz_trim"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_tifxyz2obj"
+    ln -s "$VC_BIN" "$BIN_DIR/flatboi"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_obj2tifxyz"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_obj_uv_lift"
     ```
 
     For example, when you run:
@@ -291,7 +313,8 @@ This guide installs the VC binaries in your home directory using an Apptainer co
     For the commands to be available from anywhere, add `~/bin` to your `PATH`:
 
     ```bash
-    export PATH="~/bin:$PATH"
+    cd ~
+    export PATH="bin:$PATH"
     ```
 
     This change only applies to the current shell session. To make it permanent, add the same line to your `~/.bashrc`:
@@ -350,5 +373,7 @@ The python environment should have already been created as described in `Getting
 3. Run `render_ink.py`
 
     ```bash
-    python spiral/render_ink.py --volume <path_to_dataset> <path_to_fit_spiral_output>/meshes/fitted/ --lasagna-dir spiral/lasagna
+    python render_ink.py --volume <path_to_dataset> <path_to_fit_spiral_output>/meshes/fitted/ --lasagna-dir lasagna
     ```
+
+    Add `--lasagna-device cpu` to run it on a cpu
