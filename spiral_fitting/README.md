@@ -206,7 +206,7 @@ This guide installs the VC binaries in your home directory using an Apptainer co
     Pull the Volume Cartographer container from GitHub Container Registry:
 
     ```bash
-    apptainer pull ~/volume-cartographer.sif docker://ghcr.io/scrollprize/volume-cartographer:edge
+    apptainer pull ~/volume-cartographer.sif docker://ghcr.io/scrollprize/villa/volume-cartographer:edge
     ```
 
     You can test the container by starting a shell:
@@ -214,6 +214,8 @@ This guide installs the VC binaries in your home directory using an Apptainer co
     ```bash
     apptainer shell ~/volume-cartographer.sif
     ```
+
+    The binaries can be found in `/usr/local/bin/`.
 
     Alternatively, you can run a binary directly:
 
@@ -280,12 +282,41 @@ This guide installs the VC binaries in your home directory using an Apptainer co
     BIN_DIR=~/bin
     VC_BIN="$BIN_DIR/vc"
 
-    ln -s "$VC_BIN" "$BIN_DIR/vc_render_tifxyz"
-    ln -s "$VC_BIN" "$BIN_DIR/vc_tifxyz_trim"
-    ln -s "$VC_BIN" "$BIN_DIR/vc_tifxyz2obj"
     ln -s "$VC_BIN" "$BIN_DIR/flatboi"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_add_ignore_label"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_calc_surface_metrics"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_create_segment_mask"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_cut_windings"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_diffuse_winding"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_flatten"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_gen_normalgrids"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_grow_seg_from_seed"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_grow_seg_from_segments"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_merge_tifxyz"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_ngrids"
     ln -s "$VC_BIN" "$BIN_DIR/vc_obj2tifxyz"
-    ln -s "$VC_BIN" "$BIN_DIR/vc_obj_uv_lift"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_obj2tifxyz_legacy"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_objrefine"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_project_tifxyz"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_render_tifxyz"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_render_video"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_rgb2tifxyz"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_seg_add_overlap"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_thinning"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_tifxyz"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_tifxyz2obj"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_tifxyz2rgb"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_tifxyz2zarr_sparse"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_tifxyz_gengt"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_tifxyz_inp_mask"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_tifxyz_mmap_prepare"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_tifxyz_trim"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_tifxyz_winding"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_transform_geom"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_visualize"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_volpkg_convert"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_zarr_recompress"
+    ln -s "$VC_BIN" "$BIN_DIR/vc_zarr_to_tiff"
     ```
 
     For example, when you run:
@@ -313,8 +344,7 @@ This guide installs the VC binaries in your home directory using an Apptainer co
     For the commands to be available from anywhere, add `~/bin` to your `PATH`:
 
     ```bash
-    cd ~
-    export PATH="bin:$PATH"
+    export PATH="~/bin:$PATH"
     ```
 
     This change only applies to the current shell session. To make it permanent, add the same line to your `~/.bashrc`:
@@ -336,10 +366,6 @@ This guide installs the VC binaries in your home directory using an Apptainer co
     ```bash
     vc_render_tifxyz --help
     vc_tifxyz_trim --help
-    vc_tifxyz2obj --help
-    flatboi --help
-    vc_obj2tifxyz --help
-    vc_obj_uv_lift --help # Doesn't work
     ```
 
     If these commands work, the VC binaries are successfully accessible from your shell without having to manually invoke Apptainer.
@@ -360,7 +386,10 @@ The python environment should have already been created as described in `Getting
     ```bash
     conda install -c conda-forge 7zip
     
-    7z x 54keV_7.91um_Scroll1B.7z 
+    7z x 54keV_7.91um_Scroll1B.7z
+
+    mkdir extracted
+    tar -xf 54keV_7.91um_Scroll1B -C extracted
     ```
 
     Optional: Use `tar.zst` for faster unpacking:
