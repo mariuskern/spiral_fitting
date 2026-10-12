@@ -1,3 +1,12 @@
+// Modified in October 2026 to support command-line configuration overrides
+// for the output directory (--output-dir), seed coordinates (--seed), and
+// axis vectors (--axis1, --axis2). Provided arguments override the default
+// values defined in the header; unspecified options retain their defaults.
+// Output paths use the selected directory where applicable, preserving
+// the original behavior when no overrides are provided.
+
+
+
 #include <cstdio>
 #include <cstdlib>
 #include <tuple>
@@ -11,6 +20,9 @@
 #include <iterator>
 #include <dirent.h>
 #include <random>
+#include <filesystem>
+#include <stdexcept>
+#include <string>
 
 #include <omp.h>
 
@@ -186,11 +198,84 @@ bool CheckSeedDistances(std::vector<std::vector<float>> &seeds)
 	return true;
 }
 
+struct PatchConfig {
+    int seedX = SEED_X;
+    int seedY = SEED_Y;
+    int seedZ = SEED_Z;
+
+    double axis1X = SEED_AXIS1_X;
+    double axis1Y = SEED_AXIS1_Y;
+    double axis1Z = SEED_AXIS1_Z;
+
+    double axis2X = SEED_AXIS2_X;
+    double axis2Y = SEED_AXIS2_Y;
+    double axis2Z = SEED_AXIS2_Z;
+
+    std::string outputDir = OUTPUT_DIR;
+};
+
+
+static std::string OutputPath(const PatchConfig& config, const std::string& filename)
+{
+    return (std::filesystem::path(config.outputDir) / filename).string();
+}
+
+
+static std::vector<std::string> ParseCommonOptions(
+    int argc,
+    char* argv[],
+    PatchConfig& config)
+{
+    std::vector<std::string> positional;
+    positional.push_back(argv[0]);
+
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+
+        auto require = [&](int count) {
+            if (i + count >= argc) {
+                throw std::runtime_error(
+                    arg + " has too few arguments");
+            }
+        };
+
+        if (arg == "--output-dir") {
+            require(1);
+            config.outputDir = argv[++i];
+        }
+        else if (arg == "--seed") {
+            require(3);
+            config.seedX = std::stoi(argv[++i]);
+            config.seedY = std::stoi(argv[++i]);
+            config.seedZ = std::stoi(argv[++i]);
+        }
+        else if (arg == "--axis1") {
+            require(3);
+            config.axis1X = std::stod(argv[++i]);
+            config.axis1Y = std::stod(argv[++i]);
+            config.axis1Z = std::stod(argv[++i]);
+        }
+        else if (arg == "--axis2") {
+            require(3);
+            config.axis2X = std::stod(argv[++i]);
+            config.axis2Y = std::stod(argv[++i]);
+            config.axis2Z = std::stod(argv[++i]);
+        }
+        else {
+            positional.push_back(arg);
+        }
+    }
+
+    return positional;
+}
+
+
 // Since most time is now taken by up patch generation, this could be made multithreaded by generating several seeds at a time,
 // and if they are spaced far enough apart then generate several patches at once.
 //
 // This is done by having more than once instance of PatchGenerator
-bool GeneratePatches(std::map<int,Patch> *patches,AlignmentMap *am, int numPatches)
+// bool GeneratePatches(std::map<int,Patch> *patches,AlignmentMap *am, int numPatches)
+bool GeneratePatches(std::map<int,Patch> *patches,AlignmentMap *am, int numPatches, const PatchConfig& config)
 {
 	int acceptedCount=0,unalignedCount=0,acceptedWithSomeBadVariance=0;
 
@@ -203,21 +288,49 @@ bool GeneratePatches(std::map<int,Patch> *patches,AlignmentMap *am, int numPatch
 	
 	std::vector<std::vector<float> > seeds;
 			
-	float seedInit[] = {
-	  SEED_X,
-	  SEED_Y,
-	  SEED_Z,
-	  SEED_AXIS1_X,
-	  SEED_AXIS1_Y,
-	  SEED_AXIS1_Z,
-	  SEED_AXIS2_X,
-	  SEED_AXIS2_Y,
-	  SEED_AXIS2_Z};
+	// float seedInit[] = {
+	//   SEED_X,
+	//   SEED_Y,
+	//   SEED_Z,
+	//   SEED_AXIS1_X,
+	//   SEED_AXIS1_Y,
+	//   SEED_AXIS1_Z,
+	//   SEED_AXIS2_X,
+	//   SEED_AXIS2_Y,
+	//   SEED_AXIS2_Z};
+    
+    float seedInit[] = {
+        static_cast<float>(config.seedX),
+        static_cast<float>(config.seedY),
+        static_cast<float>(config.seedZ),
+        static_cast<float>(config.axis1X),
+        static_cast<float>(config.axis1Y),
+        static_cast<float>(config.axis1Z),
+        static_cast<float>(config.axis2X),
+        static_cast<float>(config.axis2Y),
+        static_cast<float>(config.axis2Z)
+    };
+
+    const std::filesystem::path outputDir(config.outputDir);
+
+    std::filesystem::create_directories(outputDir);
+    std::filesystem::create_directories(outputDir / "patches");
+    std::filesystem::create_directories(outputDir / "surface.bp");
+    std::filesystem::create_directories(outputDir / "surface.bp" / "surface");
+    std::filesystem::create_directories(outputDir / "boundary.bp");
+    std::filesystem::create_directories(outputDir / "boundary.bp" / "surface");
+
+    const std::string surfacePath = (outputDir / "surface.bp").string();
+    const std::string boundaryPath = (outputDir / "boundary.bp").string();
+    const std::string patchesPath = (outputDir / "patches").string();
+    const std::string relationshipsPath = (outputDir / "rel.csv").string();
 
 	seeds.push_back(std::vector<float>(std::begin(seedInit),std::end(seedInit)));
 	  
-	BigPatch *bp = OpenBigPatch(OUTPUT_DIR "/surface.bp");
-	BigPatch *bpb = OpenBigPatch(OUTPUT_DIR "/boundary.bp");
+	// BigPatch *bp = OpenBigPatch(OUTPUT_DIR "/surface.bp");
+	// BigPatch *bpb = OpenBigPatch(OUTPUT_DIR "/boundary.bp");
+    BigPatch *bp = OpenBigPatch(surfacePath.c_str());
+	BigPatch *bpb = OpenBigPatch(boundaryPath.c_str());
 
 	int startingPatch = -1;
 	
@@ -443,11 +556,13 @@ bool GeneratePatches(std::map<int,Patch> *patches,AlignmentMap *am, int numPatch
 	// Write patches and patch relationships to files
 	for(auto &p : *patches)
 	{
-		p.second.Write(OUTPUT_DIR "/patches",p.first);
+		// p.second.Write(OUTPUT_DIR "/patches",p.first);
+		p.second.Write(patchesPath.c_str() ,p.first);
 	}
 	
 	{
-		std::ofstream os(OUTPUT_DIR "/rel.csv");
+		// std::ofstream os(OUTPUT_DIR "/rel.csv");
+		std::ofstream os(relationshipsPath);
 		for(auto &a : *am)
 		{
 			for(auto &al : a.second)
@@ -478,13 +593,18 @@ bool GeneratePatches(std::map<int,Patch> *patches,AlignmentMap *am, int numPatch
 	return true;
 }
 
-void LoadPatchesAndRelationships(std::map<int,Patch> *patches, 	AlignmentMap *am, int limit = -1, std::set<int> *restricted = NULL)
+// void LoadPatchesAndRelationships(std::map<int,Patch> *patches, 	AlignmentMap *am, int limit = -1, std::set<int> *restricted = NULL)
+void LoadPatchesAndRelationships(std::map<int,Patch> *patches, 	AlignmentMap *am, const PatchConfig& config, int limit = -1, std::set<int> *restricted = NULL)
 {
 	DIR *dir;
 	struct dirent *ent;
 
+    std::string patchesDir = OutputPath(config, "patches");
+    std::string relFile = OutputPath(config, "rel.csv");
+
 	// iterate through all patch files
-	if ((dir = opendir (OUTPUT_DIR "/patches")) != NULL)
+    // if ((dir = opendir (OUTPUT_DIR "/patches")) != NULL)
+	if ((dir = opendir (patchesDir.c_str())) != NULL)
 	{
 		int i = 0;
 		while ((ent = readdir (dir)) != NULL)
@@ -507,7 +627,8 @@ void LoadPatchesAndRelationships(std::map<int,Patch> *patches, 	AlignmentMap *am
 					
 					if (i++%100==0)	
 						printf("Loading %d\n",patchNum);
-					(*patches)[patchNum].Read(OUTPUT_DIR "/patches",patchNum);
+                    // (*patches)[patchNum].Read(OUTPUT_DIR "/patches",patchNum);
+					(*patches)[patchNum].Read(patchesDir.c_str(),patchNum);
 		
 				}
 			}
@@ -517,7 +638,8 @@ void LoadPatchesAndRelationships(std::map<int,Patch> *patches, 	AlignmentMap *am
 	}
 	
 	{
-		std::ifstream is(OUTPUT_DIR "/rel.csv");
+		// std::ifstream is(OUTPUT_DIR "/rel.csv");
+        std::ifstream is(relFile);
 		std::string line;
 		
 		while(std::getline(is,line))
@@ -568,12 +690,14 @@ void LoadPatchesAndRelationships(std::map<int,Patch> *patches, 	AlignmentMap *am
 	
 }
 
-void LoadBadPatches(std::set<int> &badPatches, std::set<std::pair<int,int>> &manualBadRel, bool includeBadBridges = false)
+// void LoadBadPatches(std::set<int> &badPatches, std::set<std::pair<int,int>> &manualBadRel, bool includeBadBridges = false)
+void LoadBadPatches(std::set<int> &badPatches, std::set<std::pair<int,int>> &manualBadRel, const PatchConfig& config, bool includeBadBridges = false)
 {
 		{
 			int i;
 			
-			std::ifstream is(OUTPUT_DIR "/badpatches.csv");
+			// std::ifstream is(OUTPUT_DIR "/badpatches.csv");
+            std::ifstream is(OutputPath(config, "badpatches.csv"));
 			while(is>>i)
 			{
 				badPatches.insert(i);
@@ -583,7 +707,8 @@ void LoadBadPatches(std::set<int> &badPatches, std::set<std::pair<int,int>> &man
 		{
 			int i;
 			
-			std::ifstream is(OUTPUT_DIR "/manualBadPatch.csv");
+			// std::ifstream is(OUTPUT_DIR "/manualBadPatch.csv");
+            std::ifstream is(OutputPath(config, "manualBadPatch.csv"));
 			while(is>>i)
 			{
 				badPatches.insert(i);
@@ -594,7 +719,8 @@ void LoadBadPatches(std::set<int> &badPatches, std::set<std::pair<int,int>> &man
 		{
 			int i;
 			
-			std::ifstream is(OUTPUT_DIR "/badbridges.csv");
+			// std::ifstream is(OUTPUT_DIR "/badbridges.csv");
+            std::ifstream is(OutputPath(config, "badbridges.csv"));
 			while(is>>i)
 			{
 				badPatches.insert(i);
@@ -602,7 +728,8 @@ void LoadBadPatches(std::set<int> &badPatches, std::set<std::pair<int,int>> &man
 		}
 		
 		{
-			std::ifstream is(OUTPUT_DIR "/manualBadRel.csv");
+			// std::ifstream is(OUTPUT_DIR "/manualBadRel.csv");
+            std::ifstream is(OutputPath(config, "manualBadRel.csv"));
 			std::string line;
 			while(std::getline(is,line))
 			{
@@ -618,6 +745,25 @@ void LoadBadPatches(std::set<int> &badPatches, std::set<std::pair<int,int>> &man
 
 int main(int argc, char *argv[])
 {
+    PatchConfig config;
+    std::vector<std::string> args;
+
+    try {
+        args = ParseCommonOptions(argc, argv, config);
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << '\n';
+        return 1;
+    }
+
+    std::vector<char*> filteredArgs;
+    for (const auto& arg : args) {
+        filteredArgs.push_back(const_cast<char*>(arg.c_str()));
+    }
+
+    argc = static_cast<int>(filteredArgs.size());
+    argv = filteredArgs.data();
+
 	std::string mode("g");
 	if (false) // TODO parameter checking
 	{
@@ -658,9 +804,11 @@ int main(int argc, char *argv[])
 		int patchNum1 = atoi(argv[3]);
 
 		printf("Loading %d\n",patchNum0);		
-		p0.Read(OUTPUT_DIR "/patches",patchNum0);
+		// p0.Read(OUTPUT_DIR "/patches",patchNum0);
+		p0.Read(OutputPath(config, "patches").c_str(),patchNum0);
 		printf("Loading %d\n",patchNum1);		
-		p1.Read(OUTPUT_DIR "/patches",patchNum1);
+		// p1.Read(OUTPUT_DIR "/patches",patchNum1);
+		p1.Read(OutputPath(config, "patches").c_str(),patchNum1);
 
 		if (atoi(argv[4])==1)
 			p1.Flip();
@@ -710,7 +858,8 @@ int main(int argc, char *argv[])
 		AlignmentMap *am = new AlignmentMap;
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
-		GeneratePatches(patches,am,numPatches);
+		// GeneratePatches(patches,am,numPatches);
+		GeneratePatches(patches,am, numPatches, config);
 		printf("Generated patches\n");
 		
 		delete patches;
@@ -727,9 +876,11 @@ int main(int argc, char *argv[])
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
 		printf("Loading patches and relationships...\n");
-		LoadPatchesAndRelationships(patches,am);
+        // LoadPatchesAndRelationships(patches,am);
+		LoadPatchesAndRelationships(patches,am, config);
 
-		GeneratePatches(patches,am,numPatches);
+        // GeneratePatches(patches,am,numPatches);
+		GeneratePatches(patches,am,numPatches,config);
 		printf("Generated patches\n");
 		
 		delete patches;
@@ -742,10 +893,11 @@ int main(int argc, char *argv[])
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
 		printf("Loading patches and relationships...\n");
-		LoadPatchesAndRelationships(patches,am);
+		LoadPatchesAndRelationships(patches,am, config);
 
 		{
-			ofstream os(OUTPUT_DIR "/patchVolCoords.csv");
+			// ofstream os(OUTPUT_DIR "/patchVolCoords.csv");
+			ofstream os(OutputPath(config, "patchVolCoords.csv"));
 		
 			for(auto &p : *patches)
 			{
@@ -772,7 +924,8 @@ int main(int argc, char *argv[])
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
 		printf("Loading patches and relationships...\n");
-		LoadPatchesAndRelationships(patches,am);
+        // LoadPatchesAndRelationships(patches,am);
+		LoadPatchesAndRelationships(patches,am, config);
 
 		std::set<int> badPatches;
 		std::vector<std::tuple<int,int,float>> badPatchScores;
@@ -783,14 +936,16 @@ int main(int argc, char *argv[])
 		delete bpf;
 
 		{
-			std::ofstream os(OUTPUT_DIR "/badpatches.csv");
+			// std::ofstream os(OUTPUT_DIR "/badpatches.csv");
+			std::ofstream os(OutputPath(config, "badpatches.csv"));
 			for(auto i : badPatches)
 			{
 				os << i << std::endl;;
 			}
 		}
 		{
-			std::ofstream os(OUTPUT_DIR "/badpatchscores.csv");
+			// std::ofstream os(OUTPUT_DIR "/badpatchscores.csv");
+			std::ofstream os(OutputPath(config, "badpatchscores.csv"));
 			for(auto i : badPatchScores)
 			{
 				os << std::get<0>(i) << "," << std::get<1>(i) << "," << std::get<2>(i) << std::endl;;
@@ -808,7 +963,8 @@ int main(int argc, char *argv[])
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
 		printf("Loading patches and relationships...\n");
-		LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+        // LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		LoadPatchesAndRelationships(patches,am, config, PATCH_LIMIT);
 		AugmentAlignmentMap(*am);
 		
 		std::set<int> badPatches;
@@ -870,14 +1026,16 @@ int main(int argc, char *argv[])
 		}
 
 		{
-			std::ofstream os(OUTPUT_DIR "/badpatches.csv");
+			// std::ofstream os(OUTPUT_DIR "/badpatches.csv");
+			std::ofstream os(OutputPath(config, "badpatches.csv"));
 			for(auto i : badPatches)
 			{
 				os << i << std::endl;;
 			}
 		}
 		{
-			std::ofstream os(OUTPUT_DIR "/badpatchscores.csv");
+			// std::ofstream os(OUTPUT_DIR "/badpatchscores.csv");
+			std::ofstream os(OutputPath(config, "badpatchscores.csv"));
 			for(auto i : badPatchScores)
 			{
 				os << std::get<0>(i) << "," << std::get<1>(i) << "," << std::get<2>(i) << std::endl;;
@@ -897,14 +1055,16 @@ int main(int argc, char *argv[])
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
 		printf("Loading patches and relationships...\n");
-		LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		// LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		LoadPatchesAndRelationships(patches,am, config, PATCH_LIMIT);
 		
 		AugmentAlignmentMap(*am);
 
 		std::set<int> badPatches;
 		std::set<std::pair<int,int>> manualBadRel;
 
-		LoadBadPatches(badPatches,manualBadRel);
+		// LoadBadPatches(badPatches,manualBadRel);
+		LoadBadPatches(badPatches,manualBadRel, config);
 		
 		std::vector<int> patchOrder;
 		std::vector<std::pair<int,alignment>> alignmentOrder;
@@ -918,7 +1078,8 @@ int main(int argc, char *argv[])
 		MakeVisitOrder(am,patches,badPatches,manualBadRel,patchOrder,alignmentOrder,patchPositions,neighbourList,true);
 		
 		{
-			ofstream os(OUTPUT_DIR "/alignmentorder.txt");
+			// ofstream os(OUTPUT_DIR "/alignmentorder.txt");
+			ofstream os(OutputPath(config, "alignmentorder.txt"));
 			
 			for(auto &a : alignmentOrder)
 			{
@@ -936,7 +1097,8 @@ int main(int argc, char *argv[])
 		}
 
 		{
-			ofstream os(OUTPUT_DIR "/neighbours.csv");
+			// ofstream os(OUTPUT_DIR "/neighbours.csv");
+			ofstream os(OutputPath(config, "neighbours.csv"));
 			
 			for(auto &a : alignmentOrder)
 			{
@@ -979,7 +1141,8 @@ int main(int argc, char *argv[])
 
 			{
 				// remember to copy this to badbridges.csv
-				std::ofstream os(OUTPUT_DIR "/badbridges_out.csv");
+				// std::ofstream os(OUTPUT_DIR "/badbridges_out.csv");
+				std::ofstream os(OutputPath(config, "badbridges_out.csv"));
 				for(auto i : badBridges)
 				{
 					os << i << std::endl;;
@@ -1004,14 +1167,16 @@ int main(int argc, char *argv[])
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
 		printf("Loading patches and relationships...\n");
-		LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		// LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		LoadPatchesAndRelationships(patches,am, config, PATCH_LIMIT);
 		
 		AugmentAlignmentMap(*am);
 
 		std::set<int> badPatches;
 		std::set<std::pair<int,int>> manualBadRel;
 
-		LoadBadPatches(badPatches,manualBadRel);
+		// LoadBadPatches(badPatches,manualBadRel);
+		LoadBadPatches(badPatches,manualBadRel, config);
 		
 		std::vector<std::vector<int>> patchOrders;
 		std::vector<std::vector<std::pair<int,alignment>>> alignmentOrders;
@@ -1021,7 +1186,8 @@ int main(int argc, char *argv[])
 		numComponents = MakeVisitOrders(numComponents,am,patches,badPatches,manualBadRel,patchOrders,alignmentOrders,patchPositionss,neighbourList,true);
 		
 		{
-			ofstream os(OUTPUT_DIR "/alignmentorders.txt");
+			// ofstream os(OUTPUT_DIR "/alignmentorders.txt");
+			ofstream os(OutputPath(config, "alignmentorders.txt"));
 			
 			for(auto &i : alignmentOrders)
 			{
@@ -1043,7 +1209,8 @@ int main(int argc, char *argv[])
 		}
 
 		{
-			ofstream os(OUTPUT_DIR "/neighbourss.csv");
+			// ofstream os(OUTPUT_DIR "/neighbourss.csv");
+			ofstream os(OutputPath(config, "neighbourss.csv"));
 			
 			for(auto &i : alignmentOrders)
 			{
@@ -1059,7 +1226,8 @@ int main(int argc, char *argv[])
 
 		{
 			// remember to copy this to badbridges.csv
-			std::ofstream os(OUTPUT_DIR "/badbridgess_out.csv");
+			// std::ofstream os(OUTPUT_DIR "/badbridgess_out.csv");
+			std::ofstream os(OutputPath(config, "badbridgess_out.csv"));
 
 			for(int i = 0; i<numComponents; i++)
 			{
@@ -1141,12 +1309,14 @@ int main(int argc, char *argv[])
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
 		printf("Loading patches and relationships...\n");
-		LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		// LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		LoadPatchesAndRelationships(patches,am, config, PATCH_LIMIT);
 		
 		std::vector<int> patchOrder;
 		
 		{
-			std::ifstream is(OUTPUT_DIR "/patchorder.csv");
+			// std::ifstream is(OUTPUT_DIR "/patchorder.csv");
+			std::ifstream is(OutputPath(config, "patchorder.csv"));
 			int i;
 			while(is>>i)
 			{
@@ -1157,7 +1327,8 @@ int main(int argc, char *argv[])
 		std::set<std::pair<int,int>> manualGoodRel;
 
 		{
-			std::ifstream is(OUTPUT_DIR "/manualGoodRel.csv");
+			// std::ifstream is(OUTPUT_DIR "/manualGoodRel.csv");
+			std::ifstream is(OutputPath(config, "manualGoodRel.csv"));
 			std::string line;
 			while(std::getline(is,line))
 			{
@@ -1198,7 +1369,8 @@ int main(int argc, char *argv[])
 
 				// This must come from patchsprings.py
 				// TODO - patchsprings will be rewritten in C++ soon
-				ifstream is(OUTPUT_DIR "/patchPositions.txt");
+				// ifstream is(OUTPUT_DIR "/patchPositions.txt");
+				ifstream is(OutputPath(config, "patchPositions.txt"));
 				
 				while(true)
 				{
@@ -1236,12 +1408,14 @@ int main(int argc, char *argv[])
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
 		printf("Loading patches and relationships...\n");
-		LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		// LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		LoadPatchesAndRelationships(patches,am, config, PATCH_LIMIT);
 
 		std::set<std::pair<int,int>> manualGoodRel;
 
 		{
-			std::ifstream is(OUTPUT_DIR "/manualGoodRel.csv");
+			// std::ifstream is(OUTPUT_DIR "/manualGoodRel.csv");
+			std::ifstream is(OutputPath(config, "manualGoodRel.csv"));
 			std::string line;
 			while(std::getline(is,line))
 			{
@@ -1258,7 +1432,8 @@ int main(int argc, char *argv[])
 			std::vector<int> patchOrder;
 			
 			{
-				std::ifstream is(OUTPUT_DIR "/patchorders.csv");
+				// std::ifstream is(OUTPUT_DIR "/patchorders.csv");
+				std::ifstream is(OutputPath(config, "patchorders.csv"));
 				int poCounter = 0;
 				std::string line;
 				while (std::getline(is, line)) {
@@ -1291,7 +1466,8 @@ int main(int argc, char *argv[])
 					(*patches)[i].UnsetPosition();
 
 				ostringstream oss;
-				oss << OUTPUT_DIR << "/patchPositions_" << compIndex << ".txt";
+				// oss << OUTPUT_DIR << "/patchPositions_" << compIndex << ".txt";
+				oss << config.outputDir << "/patchPositions_" << compIndex << ".txt";
 				ifstream is(oss.str());
 					
 				while(true)
@@ -1331,12 +1507,14 @@ int main(int argc, char *argv[])
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
 		printf("Loading patches and relationships...\n");
-		LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		// LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		LoadPatchesAndRelationships(patches,am, config, PATCH_LIMIT);
 
 		std::vector<int> patchOrder;
 		
 		{
-			std::ifstream is(OUTPUT_DIR "/patchorder.csv");
+			// std::ifstream is(OUTPUT_DIR "/patchorder.csv");
+			std::ifstream is(OutputPath(config, "patchorder.csv"));
 			int i;
 			while(is>>i)
 			{
@@ -1346,7 +1524,8 @@ int main(int argc, char *argv[])
 
 		// This must come from patchsprings.py
 		// TODO - patchsprings will be rewritten in C++ soon
-		ifstream is(OUTPUT_DIR "/patchPositions.txt");
+		// ifstream is(OUTPUT_DIR "/patchPositions.txt");
+		ifstream is(OutputPath(config, "patchPositions.txt"));
 			
 		while(true)
 		{
@@ -1366,7 +1545,8 @@ int main(int argc, char *argv[])
 
 		printf("Rendering...\n");
 
-		SliceAnimRender(surfaceZarr,std::string(OUTPUT_DIR "/sliceanim"),100,50,1,closeUpIter,patches,patchOrder,mode=="A");
+		// SliceAnimRender(surfaceZarr,std::string(OUTPUT_DIR "/sliceanim"),100,50,1,closeUpIter,patches,patchOrder,mode=="A");
+		SliceAnimRender(surfaceZarr,OutputPath(config, "sliceanim"),100,50,1,closeUpIter,patches,patchOrder,mode=="A");
 	
 		ZARRClose_1_b700(surfaceZarr);
 	}
@@ -1385,15 +1565,18 @@ int main(int argc, char *argv[])
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
 		printf("Loading patches and relationships...\n");
-		LoadPatchesAndRelationships(patches,am,PATCH_LIMIT,&patchesToShowSet);
+		// LoadPatchesAndRelationships(patches,am,PATCH_LIMIT,&patchesToShowSet);
+		LoadPatchesAndRelationships(patches,am, config, PATCH_LIMIT,&patchesToShowSet);
 		printf("Finished loading\n");
 		// Enough buffers that we can do several layers before reloading buffers,
 		ZARR_1_b700 *surfaceZarr = ZARROpen_1_b700(SURFACE_ZARR);
 
 		printf("Rendering...\n");
 
-		SliceAnimRender(surfaceZarr,std::string(OUTPUT_DIR "/sliceprobe"),patchesToShow.size(),20,1,-1,patches,patchesToShow);
-		writePatchColourKey(patchesToShow,OUTPUT_DIR "/sliceprobe/key.tif");
+		// SliceAnimRender(surfaceZarr,std::string(OUTPUT_DIR "/sliceprobe"),patchesToShow.size(),20,1,-1,patches,patchesToShow);
+		SliceAnimRender(surfaceZarr,OutputPath(config, "sliceprobe"),patchesToShow.size(),20,1,-1,patches,patchesToShow);
+		// writePatchColourKey(patchesToShow,OUTPUT_DIR "/sliceprobe/key.tif");
+		writePatchColourKey(patchesToShow,OutputPath(config, "sliceprobe/key.tif").c_str());
 		
 		ZARRClose_1_b700(surfaceZarr);
 	}
@@ -1409,7 +1592,8 @@ int main(int argc, char *argv[])
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
 		printf("Loading patches and relationships...\n");
-		LoadPatchesAndRelationships(patches,am);
+		// LoadPatchesAndRelationships(patches,am);
+		LoadPatchesAndRelationships(patches,am, config);
 	
 		std::vector<Patch *> patchesToShow;
 		
@@ -1423,7 +1607,8 @@ int main(int argc, char *argv[])
 
 		printf("Rendering...\n");
 		
-		ZarrShow2U8(surfaceZarr, 0,0,zcoord,VOL_SIZE_X,VOL_SIZE_Y,std::string(OUTPUT_DIR "/slice.tif"),patchesToShow,shown,0,0,0);
+		// ZarrShow2U8(surfaceZarr, 0,0,zcoord,VOL_SIZE_X,VOL_SIZE_Y,std::string(OUTPUT_DIR "/slice.tif"),patchesToShow,shown,0,0,0);
+		ZarrShow2U8(surfaceZarr, 0,0,zcoord,VOL_SIZE_X,VOL_SIZE_Y,std::string(OutputPath(config, "slice.tif")),patchesToShow,shown,0,0,0);
 	
 		ZARRClose_1_b700(surfaceZarr);
 	}
@@ -1477,7 +1662,8 @@ int main(int argc, char *argv[])
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
 		printf("Loading patches and relationships...\n");
-		LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		// LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		LoadPatchesAndRelationships(patches,am, config, PATCH_LIMIT);
 
 		AugmentAlignmentMap(*am);
 
@@ -1488,12 +1674,14 @@ int main(int argc, char *argv[])
 		std::set<int> badPatches;
 		std::set<std::pair<int,int>> manualBadRel;
 
-		LoadBadPatches(badPatches,manualBadRel,false);
+		// LoadBadPatches(badPatches,manualBadRel,false);
+		LoadBadPatches(badPatches,manualBadRel, config, false);
 		
 		std::set<int> badBridges;
 		{
 			int i;
-			std::ifstream is(OUTPUT_DIR "/badbridges.csv");
+			// std::ifstream is(OUTPUT_DIR "/badbridges.csv");
+			std::ifstream is(OutputPath(config, "badbridges.csv"));
 			while(is>>i)
 			{
 				badBridges.insert(i);
@@ -1526,7 +1714,8 @@ int main(int argc, char *argv[])
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
 		printf("Loading patches and relationships...\n");
-		LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		// LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		LoadPatchesAndRelationships(patches,am, config, PATCH_LIMIT);
 
 		AugmentAlignmentMap(*am);
 
@@ -1537,12 +1726,14 @@ int main(int argc, char *argv[])
 		std::set<int> badPatches;
 		std::set<std::pair<int,int>> manualBadRel;
 
-		LoadBadPatches(badPatches,manualBadRel,false);
+		// LoadBadPatches(badPatches,manualBadRel,false);
+		LoadBadPatches(badPatches,manualBadRel, config, false);
 		
 		std::set<int> badBridges;
 		{
 			int i;
-			std::ifstream is(OUTPUT_DIR "/badbridges.csv");
+			// std::ifstream is(OUTPUT_DIR "/badbridges.csv");
+			std::ifstream is(OutputPath(config, "badbridges.csv"));
 			while(is>>i)
 			{
 				badBridges.insert(i);
@@ -1562,7 +1753,8 @@ int main(int argc, char *argv[])
 		std::map<int,Patch> *patches = new std::map<int,Patch>;
 
 		printf("Loading patches and relationships...\n");
-		LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		// LoadPatchesAndRelationships(patches,am,PATCH_LIMIT);
+		LoadPatchesAndRelationships(patches,am, config, PATCH_LIMIT);
 
 		AugmentAlignmentMap(*am);
 
@@ -1573,12 +1765,14 @@ int main(int argc, char *argv[])
 		std::set<int> badPatches;
 		std::set<std::pair<int,int>> manualBadRel;
 
-		LoadBadPatches(badPatches,manualBadRel,false);
+		// LoadBadPatches(badPatches,manualBadRel,false);
+		LoadBadPatches(badPatches,manualBadRel, config, false);
 		
 		std::set<int> badBridges;
 		{
 			int i;
-			std::ifstream is(OUTPUT_DIR "/badbridges.csv");
+			// std::ifstream is(OUTPUT_DIR "/badbridges.csv");
+			std::ifstream is(OutputPath(config, "badbridges.csv"));
 			while(is>>i)
 			{
 				badBridges.insert(i);
@@ -1596,13 +1790,16 @@ int main(int argc, char *argv[])
 	{
 	    printf("Running patchsprings...\n");
 		{
-			PatchSpringSimulation pss(QUADMESH_SIZE,OUTPUT_DIR);
+			// PatchSpringSimulation pss(QUADMESH_SIZE,OUTPUT_DIR);
+			PatchSpringSimulation pss(QUADMESH_SIZE, config.outputDir);
 			
-			pss.loadPatchVolCoords(OUTPUT_DIR "/patchVolCoords.csv");
+			// pss.loadPatchVolCoords(OUTPUT_DIR "/patchVolCoords.csv");
+			pss.loadPatchVolCoords(OutputPath(config, "patchVolCoords.csv"));
 			
 			std::vector<std::vector<std::string>> alignmentOrderDash;
 			{
-				std::ifstream f(OUTPUT_DIR "/alignmentorder.txt");
+				// std::ifstream f(OUTPUT_DIR "/alignmentorder.txt");
+				std::ifstream f(OutputPath(config, "alignmentorder.txt"));
 				if (!f) {
 					std::cerr << "Could not open alignmentorder.txt\n";
 				}
@@ -1634,15 +1831,18 @@ int main(int argc, char *argv[])
 		{
 			printf("Patchsprings for component %d\n",i);
 			
-			PatchSpringSimulation pss(QUADMESH_SIZE,OUTPUT_DIR,i);
+			// PatchSpringSimulation pss(QUADMESH_SIZE,OUTPUT_DIR,i);
+			PatchSpringSimulation pss(QUADMESH_SIZE, config.outputDir ,i);
 			
-			pss.loadPatchVolCoords(OUTPUT_DIR "/patchVolCoords.csv");
+			// pss.loadPatchVolCoords(OUTPUT_DIR "/patchVolCoords.csv");
+			pss.loadPatchVolCoords(OutputPath(config, "patchVolCoords.csv"));
 			
 			std::vector<std::vector<std::string>> alignmentOrderDash;
 			{
 				int alCounter = 0;
 				
-				std::ifstream f(OUTPUT_DIR "/alignmentorders.txt");
+				// std::ifstream f(OUTPUT_DIR "/alignmentorders.txt");
+				std::ifstream f(OutputPath(config, "alignmentorders.txt"));
 				if (!f) {
 					std::cerr << "Could not open alignmentorders.txt\n";
 				}

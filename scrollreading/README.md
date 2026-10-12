@@ -78,19 +78,27 @@ The original, unmodified code can be found in `original_code/`.
     SEED_AXIS2_Z=
     ```
 
-5. Create the output directory, and within it make the folders `surface.bp/surface` and `boundary.bp/surface` and `patches`
+    Alternatively, you can specify the output directory and seed coordinates when launching the scroll-reading code, as described in the next step.
 
-6. Run make
+<!-- 5. Create the output directory, and within it make the folders `surface.bp/surface` and `boundary.bp/surface` and `patches` -->
+
+5. Run make
 
     ```bash
     make
     ```
 
-7. Run the pipeline
+6. Run the pipeline
+
+    <!-- ```bash
+    ./simpaper10 g 100
+    ``` -->
 
     ```bash
-    ./simpaper10 g 100
+    ./simpaper10 g --output-dir <output-path> --seed <X> <Y> <Z> --axis1 <X> <Y> <Z> --axis2 <X> <Y> <Z>
     ```
+
+    The values provided as command-line arguments will override the values specified in the `.env` file.
 
     If you get an error saying `Aborting, too few points added` use a larger component.
 
