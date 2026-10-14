@@ -46,7 +46,7 @@ The original, unmodified code can be found in `original_code/`.
 3. Get seed points
 
     ```bash
-    python utils/get_seed_points.py <input_tiff>
+    python utils/get_seed_points.py <input_zarr> --output_path <output_path> --output_filename <output_filename>
     ```
 
     You can check the value of a seed point using:

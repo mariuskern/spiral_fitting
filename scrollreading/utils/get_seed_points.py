@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import argparse
 import json
 from pathlib import Path
@@ -35,7 +36,7 @@ def choose_random_seeds(labels, rng):
     # Keep track of global chunk coordinates.
     chunk_locations = list(np.ndindex(labels.numblocks))
 
-    for i, delayed_chunk in enumerate(delayed_chunks):
+    for i, delayed_chunk in enumerate(delayed_chunks[:min(len(delayed_chunks), 2)]):
         print(f"Processing label chunk {i + 1}/{len(delayed_chunks)}...")
 
         chunk = delayed_chunk.compute()
@@ -126,7 +127,13 @@ def main():
     )
 
     parser.add_argument(
-        "--output",
+        "--output_path",
+        default="out",
+        help="Output path (default: out)",
+    )
+
+    parser.add_argument(
+        "--output_filename",
         default="seeds.json",
         help="Output JSON file (default: seeds.json)",
     )
@@ -218,14 +225,9 @@ def main():
     # Connectivity
     # ------------------------------------------------------------------
 
-    structure = ndimage.generate_binary_structure(
-        rank=3,
-        connectivity=args.connectivity,
-    )
+    structure = ndimage.generate_binary_structure(rank=3, connectivity=args.connectivity)
 
-    print(
-        f"Connectivity: {args.connectivity}"
-    )
+    print(f"Connectivity: {args.connectivity}")
 
     # ------------------------------------------------------------------
     # Connected components
@@ -233,10 +235,7 @@ def main():
 
     print("Finding connected components...")
 
-    labels, num_components = ndmeasure.label(
-        mask,
-        structure=structure,
-    )
+    labels, num_components = ndmeasure.label(mask, structure=structure)
 
     # Computing this only produces the number of components,
     # not the complete label volume.
@@ -258,7 +257,12 @@ def main():
             "seeds": [],
         }
 
-        with open(args.output, "w") as f:
+        output_path = Path(args.output_path)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        output_file = output_path / args.output_filename
+
+        with output_file.open("w") as f:
             json.dump(output, f, indent=2)
 
         return
@@ -310,9 +314,12 @@ def main():
         "seeds": components,
     }
 
-    output_path = Path(args.output)
+    output_path = Path(args.output_path)
+    output_path.mkdir(parents=True, exist_ok=True)
 
-    with output_path.open("w") as f:
+    output_file = output_path / args.output_filename
+
+    with output_file.open("w") as f:
         json.dump(output, f, indent=2)
 
     print()
