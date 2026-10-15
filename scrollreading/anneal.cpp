@@ -1,3 +1,6 @@
+// Modified in October 2026 to additionally accept a const PatchConfig reference.
+
+#include "patch_config.h"
 #include <iostream>
 #include <fstream>
 #include <set>
@@ -18,12 +21,14 @@
 #include "parameters.h"
 #include "PatchSpringSimulation.hpp"
 
-void LoadAnnealState(std::set<int> &state)
+// void LoadAnnealState(std::set<int> &state)
+void LoadAnnealState(const PatchConfig& config, std::set<int> &state)
 {
 	{
 		int i;
 			
-		std::ifstream is(OUTPUT_DIR "/annealState.csv");
+        // std::ifstream is(OUTPUT_DIR "/annealState.csv");
+		std::ifstream is(OutputPath(config, "annealState.csv"));
 		while(is>>i)
 		{
 			state.insert(i);
@@ -261,7 +266,8 @@ bool Accept(float scoreDiff, float T, std::mt19937 &rng)
 // scores the placement, and updates patch heat from the mismatches found.
 // Returns the score. This is the single expensive operation in the whole
 // algorithm — both calibration sampling and the main loop route through here.
-float EvaluateState(AlignmentMap *am, std::map<int,Patch> *patches,
+// float EvaluateState(AlignmentMap *am, std::map<int,Patch> *patches,
+float EvaluateState(const PatchConfig& config, AlignmentMap *am, std::map<int,Patch> *patches,
                      std::set<int> &state, std::set<int> &badPatches,
                      std::set<std::pair<int,int>> &manualBadRel,
                      std::set<int> &patchesInvolved)
@@ -278,7 +284,8 @@ float EvaluateState(AlignmentMap *am, std::map<int,Patch> *patches,
 	std::map<int,affineTx> patchPositions;
 	std::map<int,std::set<int> > neighbourList;
 
-	MakeVisitOrder(am, patches, effectiveBadPatches, manualBadRel,
+	// MakeVisitOrder(am, patches, effectiveBadPatches, manualBadRel,
+	MakeVisitOrder(config, am, patches, effectiveBadPatches, manualBadRel,
 	               patchOrder, alignmentOrder, patchPositions, neighbourList,false,false);
 
 				   
@@ -311,9 +318,11 @@ float EvaluateState(AlignmentMap *am, std::map<int,Patch> *patches,
 	
 	//printf("Running patchsprings...\n");
 	{
-		PatchSpringSimulation pss(QUADMESH_SIZE,OUTPUT_DIR,false);
+		// PatchSpringSimulation pss(QUADMESH_SIZE,OUTPUT_DIR,false);
+		PatchSpringSimulation pss(QUADMESH_SIZE,config.outputDir,false);
 
-		pss.loadPatchVolCoords(OUTPUT_DIR "/patchVolCoords.csv");
+		// pss.loadPatchVolCoords(OUTPUT_DIR "/patchVolCoords.csv");
+		pss.loadPatchVolCoords(OutputPath(config, "patchVolCoords.csv"));
 
 		//printf("Loading patches for patchsprings...\n");
 		pss.loadPatches(alignmentOrderDash, patches->size());
@@ -352,7 +361,8 @@ float EvaluateState(AlignmentMap *am, std::map<int,Patch> *patches,
 // scores the placement, and updates patch heat from the mismatches found.
 // Returns the score. This is the single expensive operation in the whole
 // algorithm — both calibration sampling and the main loop route through here.
-float EvaluateStateAll(int numComponents, AlignmentMap *am, std::map<int,Patch> *patches,
+// float EvaluateStateAll(int numComponents, AlignmentMap *am, std::map<int,Patch> *patches,
+float EvaluateStateAll(const PatchConfig& config, int numComponents, AlignmentMap *am, std::map<int,Patch> *patches,
                      std::set<int> &state, std::set<int> &badPatches,
                      std::set<std::pair<int,int>> &manualBadRel,
                      std::set<int> &patchesInvolved)
@@ -368,7 +378,8 @@ float EvaluateStateAll(int numComponents, AlignmentMap *am, std::map<int,Patch> 
 	std::vector<std::map<int,affineTx>> patchPositionss;
 	std::map<int,std::set<int> > neighbourList;
 
-	MakeVisitOrders(numComponents,am, patches, effectiveBadPatches, manualBadRel,
+	// MakeVisitOrders(numComponents,am, patches, effectiveBadPatches, manualBadRel,
+	MakeVisitOrders(config, numComponents,am, patches, effectiveBadPatches, manualBadRel,
 	               patchOrders, alignmentOrders, patchPositionss, neighbourList,false,false);
 
 	float score = 0.0;
@@ -405,9 +416,11 @@ float EvaluateStateAll(int numComponents, AlignmentMap *am, std::map<int,Patch> 
 	
 		//printf("Running patchsprings...\n");
 		{
-			PatchSpringSimulation pss(QUADMESH_SIZE,OUTPUT_DIR,componentIndex,false);
+			// PatchSpringSimulation pss(QUADMESH_SIZE,OUTPUT_DIR,componentIndex,false);
+			PatchSpringSimulation pss(QUADMESH_SIZE,config.outputDir,componentIndex,false);
 
-			pss.loadPatchVolCoords(OUTPUT_DIR "/patchVolCoords.csv");
+			// pss.loadPatchVolCoords(OUTPUT_DIR "/patchVolCoords.csv");
+			pss.loadPatchVolCoords(OutputPath(config, "patchVolCoords.csv"));
 
 			//printf("Loading patches for patchsprings...\n");
 			pss.loadPatches(alignmentOrderDash, patches->size());
@@ -485,13 +498,15 @@ struct CandidateResult
 	std::set<int> patchesInvolved;
 };
 
-void Anneal(AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> patchNums,
+// void Anneal(AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> patchNums,
+void Anneal(const PatchConfig& config, AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> patchNums,
             std::set<int> badPatches, std::set<std::pair<int,int>> manualBadRel,
             std::set<int> badBridges, int iterations, int N, float initT0=-1.0)
 {
 	std::set<int> currentState;
 	std::set<int> newState;
-	LoadAnnealState(currentState);
+	// LoadAnnealState(currentState);
+	LoadAnnealState(config, currentState);
 	std::map<int,double> patchHeat;
 	std::mt19937 rng(std::random_device{}());
 	for(auto i : badBridges)
@@ -507,7 +522,8 @@ void Anneal(AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> pat
 
     float T0;
 
-	float baselineScore = EvaluateState(am, patches, currentState, badPatches,
+	// float baselineScore = EvaluateState(am, patches, currentState, badPatches,
+	float baselineScore = EvaluateState(config, am, patches, currentState, badPatches,
 											 manualBadRel, patchesInvolved);
 	
 	if (initT0==-1)
@@ -521,7 +537,8 @@ void Anneal(AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> pat
 			
 			std::set<int> trialState = currentState;
 			MutateState(trialState, patchNums, badPatches, patchHeat, 20, rng);
-			float trialScore = EvaluateState(am, patches, trialState, badPatches,
+			// float trialScore = EvaluateState(am, patches, trialState, badPatches,
+			float trialScore = EvaluateState(config, am, patches, trialState, badPatches,
 											  manualBadRel, patchesInvolved);
 			float delta = trialScore - baselineScore;
 			printf("Calibration sample %d: delta=%f\n", i, delta);
@@ -585,7 +602,8 @@ void Anneal(AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> pat
 			// instead of mutating patchHeat internally, so it's safe to call
 			// concurrently (concurrent reads of patchHeat are fine, concurrent
 			// writes are not).
-			float localScore = EvaluateState(am, patches, localState, badPatches,
+			// float localScore = EvaluateState(am, patches, localState, badPatches,
+			float localScore = EvaluateState(config, am, patches, localState, badPatches,
 			                                  manualBadRel, localPatchesInvolved);
 
 			candidates[n].state = std::move(localState);
@@ -630,7 +648,8 @@ void Anneal(AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> pat
 		}
 	}
 	{
-		std::ofstream os(OUTPUT_DIR "/annealStats.csv");
+		// std::ofstream os(OUTPUT_DIR "/annealStats.csv");
+		std::ofstream os(OutputPath(config, "annealStats.csv"));
 		for(int i = 0; i<(int)scoreLog.size(); i++)
 		{
 			os << scoreLog[i] << "," << currentScoreLog[i] << "," << stateLength[i] << std::endl;
@@ -639,7 +658,8 @@ void Anneal(AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> pat
 
 	printf("Best score = %f\n", bestScore);
 	{
-		std::ofstream os(OUTPUT_DIR "/annealState_out.csv");
+		// std::ofstream os(OUTPUT_DIR "/annealState_out.csv");
+		std::ofstream os(OutputPath(config, "annealState_out.csv"));
 		for(auto i : bestState)
 		{
 			os << i << std::endl;
@@ -659,18 +679,21 @@ void Anneal(AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> pat
 		std::map<int,affineTx> patchPositions;
 		std::map<int,std::set<int> > neighbourList;
 
-		MakeVisitOrder(am, patches, effectiveBadPatches, manualBadRel,
+		// MakeVisitOrder(am, patches, effectiveBadPatches, manualBadRel,
+		MakeVisitOrder(config, am, patches, effectiveBadPatches, manualBadRel,
 	               patchOrder, alignmentOrder, patchPositions, neighbourList,true);
 	}
 }
 
-void AnnealAll(int numComponents,AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> patchNums,
+// void AnnealAll(int numComponents,AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> patchNums,
+void AnnealAll(const PatchConfig& config, int numComponents,AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> patchNums,
             std::set<int> badPatches, std::set<std::pair<int,int>> manualBadRel,
             std::set<int> badBridges, int iterations, int N, float initT0=-1.0)
 {
 	std::set<int> currentState;
 	std::set<int> newState;
-	LoadAnnealState(currentState);
+	// LoadAnnealState(currentState);
+	LoadAnnealState(config, currentState);
 	std::map<int,double> patchHeat;
 	std::mt19937 rng(std::random_device{}());
 	for(auto i : badBridges)
@@ -686,7 +709,8 @@ void AnnealAll(int numComponents,AlignmentMap *am, std::map<int,Patch> *patches,
 
     float T0;
 
-	float baselineScore = EvaluateStateAll(numComponents,am, patches, currentState, badPatches,
+	// float baselineScore = EvaluateStateAll(numComponents,am, patches, currentState, badPatches,
+	float baselineScore = EvaluateStateAll(config, numComponents,am, patches, currentState, badPatches,
 											 manualBadRel, patchesInvolved);
 	
 	if (initT0==-1)
@@ -700,7 +724,8 @@ void AnnealAll(int numComponents,AlignmentMap *am, std::map<int,Patch> *patches,
 			
 			std::set<int> trialState = currentState;
 			MutateState(trialState, patchNums, badPatches, patchHeat, 20, rng);
-			float trialScore = EvaluateStateAll(numComponents,am, patches, trialState, badPatches,
+			// float trialScore = EvaluateStateAll(numComponents,am, patches, trialState, badPatches,
+			float trialScore = EvaluateStateAll(config, numComponents,am, patches, trialState, badPatches,
 											  manualBadRel, patchesInvolved);
 			float delta = trialScore - baselineScore;
 			printf("Calibration sample %d: delta=%f\n", i, delta);
@@ -764,7 +789,8 @@ void AnnealAll(int numComponents,AlignmentMap *am, std::map<int,Patch> *patches,
 			// instead of mutating patchHeat internally, so it's safe to call
 			// concurrently (concurrent reads of patchHeat are fine, concurrent
 			// writes are not).
-			float localScore = EvaluateStateAll(numComponents,am, patches, localState, badPatches,
+			// float localScore = EvaluateStateAll(numComponents,am, patches, localState, badPatches,
+			float localScore = EvaluateStateAll(config, numComponents,am, patches, localState, badPatches,
 			                                  manualBadRel, localPatchesInvolved);
 
 			candidates[n].state = std::move(localState);
@@ -809,7 +835,8 @@ void AnnealAll(int numComponents,AlignmentMap *am, std::map<int,Patch> *patches,
 		}
 	}
 	{
-		std::ofstream os(OUTPUT_DIR "/annealStats.csv");
+		// std::ofstream os(OUTPUT_DIR "/annealStats.csv");
+		std::ofstream os(OutputPath(config, "annealStats.csv"));
 		for(int i = 0; i<(int)scoreLog.size(); i++)
 		{
 			os << scoreLog[i] << "," << currentScoreLog[i] << "," << stateLength[i] << std::endl;
@@ -818,7 +845,8 @@ void AnnealAll(int numComponents,AlignmentMap *am, std::map<int,Patch> *patches,
 
 	printf("Best score = %f\n", bestScore);
 	{
-		std::ofstream os(OUTPUT_DIR "/annealState_out.csv");
+		// std::ofstream os(OUTPUT_DIR "/annealState_out.csv");
+		std::ofstream os(OutputPath(config, "annealState_out.csv"));
 		for(auto i : bestState)
 		{
 			os << i << std::endl;
@@ -838,7 +866,8 @@ void AnnealAll(int numComponents,AlignmentMap *am, std::map<int,Patch> *patches,
 		std::map<int,affineTx> patchPositions;
 		std::map<int,std::set<int> > neighbourList;
 
-		MakeVisitOrder(am, patches, effectiveBadPatches, manualBadRel,
+		// MakeVisitOrder(am, patches, effectiveBadPatches, manualBadRel,
+		MakeVisitOrder(config, am, patches, effectiveBadPatches, manualBadRel,
 	               patchOrder, alignmentOrder, patchPositions, neighbourList,true);
 	}
 }

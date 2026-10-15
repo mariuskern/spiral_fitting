@@ -4,6 +4,9 @@
 // values defined in the header; unspecified options retain their defaults.
 // Output paths use the selected directory where applicable, preserving
 // the original behavior when no overrides are provided.
+// PatchConfig and OutputPath are now declared in patch_config.h.
+// Calls to visit-order, scoring, annealing, omission-test, and rendering
+// functions additionally pass the shared PatchConfig.
 
 
 
@@ -27,6 +30,7 @@
 #include <omp.h>
 
 #include "parameters.h"
+#include "patch_config.h"
 
 #include "bigpatch.h"
 #include "patch_generator.h"
@@ -197,29 +201,6 @@ bool CheckSeedDistances(std::vector<std::vector<float>> &seeds)
 	
 	return true;
 }
-
-struct PatchConfig {
-    int seedX = SEED_X;
-    int seedY = SEED_Y;
-    int seedZ = SEED_Z;
-
-    double axis1X = SEED_AXIS1_X;
-    double axis1Y = SEED_AXIS1_Y;
-    double axis1Z = SEED_AXIS1_Z;
-
-    double axis2X = SEED_AXIS2_X;
-    double axis2Y = SEED_AXIS2_Y;
-    double axis2Z = SEED_AXIS2_Z;
-
-    std::string outputDir = OUTPUT_DIR;
-};
-
-
-static std::string OutputPath(const PatchConfig& config, const std::string& filename)
-{
-    return (std::filesystem::path(config.outputDir) / filename).string();
-}
-
 
 static std::vector<std::string> ParseCommonOptions(
     int argc,
@@ -1075,7 +1056,8 @@ int main(int argc, char *argv[])
 		// MakeVisitOrders : it will output alignmentorder_1.txt, neighbours_1.csv etc...
 		// then similarly for patchstrings, and the f command. Each will process several.
 		// Simulated annealing will do the same, and the score will be based on all collections of patches...
-		MakeVisitOrder(am,patches,badPatches,manualBadRel,patchOrder,alignmentOrder,patchPositions,neighbourList,true);
+		// MakeVisitOrder(am,patches,badPatches,manualBadRel,patchOrder,alignmentOrder,patchPositions,neighbourList,true);
+		MakeVisitOrder(config, am,patches,badPatches,manualBadRel,patchOrder,alignmentOrder,patchPositions,neighbourList,true);
 		
 		{
 			// ofstream os(OUTPUT_DIR "/alignmentorder.txt");
@@ -1183,7 +1165,8 @@ int main(int argc, char *argv[])
 		std::vector<std::map<int,affineTx>> patchPositionss;
 		std::map<int,std::set<int> > neighbourList;
 		
-		numComponents = MakeVisitOrders(numComponents,am,patches,badPatches,manualBadRel,patchOrders,alignmentOrders,patchPositionss,neighbourList,true);
+		// numComponents = MakeVisitOrders(numComponents,am,patches,badPatches,manualBadRel,patchOrders,alignmentOrders,patchPositionss,neighbourList,true);
+		numComponents = MakeVisitOrders(config, numComponents,am,patches,badPatches,manualBadRel,patchOrders,alignmentOrders,patchPositionss,neighbourList,true);
 		
 		{
 			// ofstream os(OUTPUT_DIR "/alignmentorders.txt");
@@ -1383,7 +1366,8 @@ int main(int argc, char *argv[])
 				}
 			}
 			
-			float score = ScorePlacement(am, patches, patchPositionsXYA,patchOrder, patchesToColour, manualGoodRel, patchesInvolved, maxDistanceThresh, 1.0, true, true, false);
+			// float score = ScorePlacement(am, patches, patchPositionsXYA,patchOrder, patchesToColour, manualGoodRel, patchesInvolved, maxDistanceThresh, 1.0, true, true, false);
+			float score = ScorePlacement(config, am, patches, patchPositionsXYA,patchOrder, patchesToColour, manualGoodRel, patchesInvolved, maxDistanceThresh, 1.0, true, true, false);
 			
 			printf("Score=%f\n",score);
 		}
@@ -1482,7 +1466,8 @@ int main(int argc, char *argv[])
 			}
 
 			std::set<int> patchesToColour;
-			float score = ScorePlacement(am, patches, patchPositionsXYA,patchOrder, patchesToColour, manualGoodRel, patchesInvolved, maxDistanceThresh, 1.0, true, true, false, compIndex);
+			// float score = ScorePlacement(am, patches, patchPositionsXYA,patchOrder, patchesToColour, manualGoodRel, patchesInvolved, maxDistanceThresh, 1.0, true, true, false, compIndex);
+			float score = ScorePlacement(config, am, patches, patchPositionsXYA,patchOrder, patchesToColour, manualGoodRel, patchesInvolved, maxDistanceThresh, 1.0, true, true, false, compIndex);
 				
 			printf("Score=%f\n",score);
 		}
@@ -1546,7 +1531,8 @@ int main(int argc, char *argv[])
 		printf("Rendering...\n");
 
 		// SliceAnimRender(surfaceZarr,std::string(OUTPUT_DIR "/sliceanim"),100,50,1,closeUpIter,patches,patchOrder,mode=="A");
-		SliceAnimRender(surfaceZarr,OutputPath(config, "sliceanim"),100,50,1,closeUpIter,patches,patchOrder,mode=="A");
+		// SliceAnimRender(surfaceZarr,OutputPath(config, "sliceanim"),100,50,1,closeUpIter,patches,patchOrder,mode=="A");
+		SliceAnimRender(config, surfaceZarr,OutputPath(config, "sliceanim"),100,50,1,closeUpIter,patches,patchOrder,mode=="A");
 	
 		ZARRClose_1_b700(surfaceZarr);
 	}
@@ -1574,7 +1560,8 @@ int main(int argc, char *argv[])
 		printf("Rendering...\n");
 
 		// SliceAnimRender(surfaceZarr,std::string(OUTPUT_DIR "/sliceprobe"),patchesToShow.size(),20,1,-1,patches,patchesToShow);
-		SliceAnimRender(surfaceZarr,OutputPath(config, "sliceprobe"),patchesToShow.size(),20,1,-1,patches,patchesToShow);
+		// SliceAnimRender(surfaceZarr,OutputPath(config, "sliceprobe"),patchesToShow.size(),20,1,-1,patches,patchesToShow);
+		SliceAnimRender(config, surfaceZarr,OutputPath(config, "sliceprobe"),patchesToShow.size(),20,1,-1,patches,patchesToShow);
 		// writePatchColourKey(patchesToShow,OUTPUT_DIR "/sliceprobe/key.tif");
 		writePatchColourKey(patchesToShow,OutputPath(config, "sliceprobe/key.tif").c_str());
 		
@@ -1608,7 +1595,8 @@ int main(int argc, char *argv[])
 		printf("Rendering...\n");
 		
 		// ZarrShow2U8(surfaceZarr, 0,0,zcoord,VOL_SIZE_X,VOL_SIZE_Y,std::string(OUTPUT_DIR "/slice.tif"),patchesToShow,shown,0,0,0);
-		ZarrShow2U8(surfaceZarr, 0,0,zcoord,VOL_SIZE_X,VOL_SIZE_Y,std::string(OutputPath(config, "slice.tif")),patchesToShow,shown,0,0,0);
+		// ZarrShow2U8(surfaceZarr, 0,0,zcoord,VOL_SIZE_X,VOL_SIZE_Y,std::string(OutputPath(config, "slice.tif")),patchesToShow,shown,0,0,0);
+		ZarrShow2U8(config, surfaceZarr, 0,0,zcoord,VOL_SIZE_X,VOL_SIZE_Y,std::string(OutputPath(config, "slice.tif")),patchesToShow,shown,0,0,0);
 	
 		ZARRClose_1_b700(surfaceZarr);
 	}
@@ -1689,7 +1677,8 @@ int main(int argc, char *argv[])
 		}
 
 		printf("Annealing\n");
-		Anneal(am,patches,patchNums,badPatches,manualBadRel,badBridges,iterations,4,initT0);
+		// Anneal(am,patches,patchNums,badPatches,manualBadRel,badBridges,iterations,4,initT0);
+		Anneal(config, am,patches,patchNums,badPatches,manualBadRel,badBridges,iterations,4,initT0);
 		
 		delete patches;
 		delete am;
@@ -1741,7 +1730,8 @@ int main(int argc, char *argv[])
 		}
 
 		printf("Annealing\n");
-		AnnealAll(numComponents,am,patches,patchNums,badPatches,manualBadRel,badBridges,iterations,4,initT0);
+		// AnnealAll(numComponents,am,patches,patchNums,badPatches,manualBadRel,badBridges,iterations,4,initT0);
+		AnnealAll(config, numComponents,am,patches,patchNums,badPatches,manualBadRel,badBridges,iterations,4,initT0);
 		
 		delete patches;
 		delete am;
@@ -1780,7 +1770,8 @@ int main(int argc, char *argv[])
 		}
 
 		printf("Omission testing\n");
-		OmissionTest(am,patches,patchNums,badPatches,manualBadRel,badBridges,4);
+		// OmissionTest(am,patches,patchNums,badPatches,manualBadRel,badBridges,4);
+		OmissionTest(config, am,patches,patchNums,badPatches,manualBadRel,badBridges,4);
 		
 		delete patches;
 		delete am;

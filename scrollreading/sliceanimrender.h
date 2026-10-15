@@ -1,4 +1,8 @@
+// Modified in October 2026 to additionally accept a const PatchConfig reference.
+
 #pragma once
+
+#include "patch_config.h"
 
 #include <map>
 #include <vector>
@@ -8,4 +12,5 @@
 #include "common_types.h"
 #include "zarr_1_b700.h"
 
-void SliceAnimRender(ZARR_1_b700 *za,const std::string &path, int patchesper, int zstep, int zscale, int closeUpIter, std::map<int,Patch> *patches, std::vector<int> &patchOrder, bool showGlobalCoord=false);
+// void SliceAnimRender(ZARR_1_b700 *za,const std::string &path, int patchesper, int zstep, int zscale, int closeUpIter, std::map<int,Patch> *patches, std::vector<int> &patchOrder, bool showGlobalCoord=false);
+void SliceAnimRender(const PatchConfig& config, ZARR_1_b700 *za,const std::string &path, int patchesper, int zstep, int zscale, int closeUpIter, std::map<int,Patch> *patches, std::vector<int> &patchOrder, bool showGlobalCoord=false);

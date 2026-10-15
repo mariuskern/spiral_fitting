@@ -1,3 +1,6 @@
+// Modified in October 2026 to additionally accept a const PatchConfig reference.
+
+#include "patch_config.h"
 #include <iostream>
 #include <fstream>
 #include <set>
@@ -23,7 +26,8 @@
 // scores the placement, and updates patch heat from the mismatches found.
 // Returns the score. This is the single expensive operation in the whole
 // algorithm — both calibration sampling and the main loop route through here.
-float EvaluateStateOT(AlignmentMap *am, std::map<int,Patch> *patches,
+// float EvaluateStateOT(AlignmentMap *am, std::map<int,Patch> *patches,
+float EvaluateStateOT(const PatchConfig& config, AlignmentMap *am, std::map<int,Patch> *patches,
                      std::set<int> &state, std::set<int> &badPatches,
                      std::set<std::pair<int,int>> &manualBadRel,
                      std::set<int> &patchesInvolved)
@@ -40,7 +44,8 @@ float EvaluateStateOT(AlignmentMap *am, std::map<int,Patch> *patches,
 	std::map<int,affineTx> patchPositions;
 	std::map<int,std::set<int> > neighbourList;
 
-	MakeVisitOrder(am, patches, effectiveBadPatches, manualBadRel,
+	// MakeVisitOrder(am, patches, effectiveBadPatches, manualBadRel,
+	MakeVisitOrder(config, am, patches, effectiveBadPatches, manualBadRel,
 	               patchOrder, alignmentOrder, patchPositions, neighbourList,false,false);
 
 				   
@@ -73,9 +78,11 @@ float EvaluateStateOT(AlignmentMap *am, std::map<int,Patch> *patches,
 	
 	//printf("Running patchsprings...\n");
 	{
-		PatchSpringSimulation pss(QUADMESH_SIZE,OUTPUT_DIR,false);
+		// PatchSpringSimulation pss(QUADMESH_SIZE,OUTPUT_DIR,false);
+		PatchSpringSimulation pss(QUADMESH_SIZE,config.outputDir,false);
 
-		pss.loadPatchVolCoords(OUTPUT_DIR "/patchVolCoords.csv");
+		// pss.loadPatchVolCoords(OUTPUT_DIR "/patchVolCoords.csv");
+		pss.loadPatchVolCoords(OutputPath(config, "patchVolCoords.csv"));
 
 		//printf("Loading patches for patchsprings...\n");
 		pss.loadPatches(alignmentOrderDash, patches->size());
@@ -111,7 +118,8 @@ float EvaluateStateOT(AlignmentMap *am, std::map<int,Patch> *patches,
 
 
 
-void OmissionTest(AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> patchNums,
+// void OmissionTest(AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> patchNums,
+void OmissionTest(const PatchConfig& config, AlignmentMap *am, std::map<int,Patch> *patches, std::vector<int> patchNums,
             std::set<int> badPatches, std::set<std::pair<int,int>> manualBadRel,
             std::set<int> badBridges, int N)
 {	
@@ -136,7 +144,8 @@ void OmissionTest(AlignmentMap *am, std::map<int,Patch> *patches, std::vector<in
 			for(int n=0;  n<N; n++)
 			{
 				std::set<int> localPatchesInvolved;
-				patchScore[n] = EvaluateStateOT(am, patches, testState[n], badPatches,
+				// patchScore[n] = EvaluateStateOT(am, patches, testState[n], badPatches,
+				patchScore[n] = EvaluateStateOT(config, am, patches, testState[n], badPatches,
 											 manualBadRel, localPatchesInvolved);
 			}
 		}
@@ -146,7 +155,8 @@ void OmissionTest(AlignmentMap *am, std::map<int,Patch> *patches, std::vector<in
 			for(int n=0;  n<N && i+n<(int)patchNums.size(); n++)
 			{
 				std::set<int> localPatchesInvolved;
-				patchScore[n] = EvaluateStateOT(am, patches, testState[n], badPatches,
+				// patchScore[n] = EvaluateStateOT(am, patches, testState[n], badPatches,
+				patchScore[n] = EvaluateStateOT(config, am, patches, testState[n], badPatches,
 											 manualBadRel, localPatchesInvolved);
 			}
 		}

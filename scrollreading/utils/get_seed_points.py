@@ -36,7 +36,8 @@ def choose_random_seeds(labels, rng):
     # Keep track of global chunk coordinates.
     chunk_locations = list(np.ndindex(labels.numblocks))
 
-    for i, delayed_chunk in enumerate(delayed_chunks[:min(len(delayed_chunks), 2)]):
+    # for i, delayed_chunk in enumerate(delayed_chunks[:min(len(delayed_chunks), 2)]):
+    for i, delayed_chunk in enumerate(delayed_chunks):
         print(f"Processing label chunk {i + 1}/{len(delayed_chunks)}...")
 
         chunk = delayed_chunk.compute()

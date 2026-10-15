@@ -1,3 +1,6 @@
+// Modified in October 2026 to additionally accept a const PatchConfig reference.
+
+#include "patch_config.h"
 /*
  Will Stevens, August 2024
  
@@ -127,7 +130,8 @@ bool LoadOrCreateTiffIntoBuffer(ZARR_1_b700 *za, uint32_t *pointBuffer, int xcoo
 	return true;
 }
 	
-void ZarrShow2U8(ZARR_1_b700 *za, int xcoord, int ycoord, int zcoord, int width, int height, const std::string &tifName, std::vector<Patch *> patches, std::set<Patch *> &shown, int bgr, int bgg, int bgb, bool showGlobalCoord)
+// void ZarrShow2U8(ZARR_1_b700 *za, int xcoord, int ycoord, int zcoord, int width, int height, const std::string &tifName, std::vector<Patch *> patches, std::set<Patch *> &shown, int bgr, int bgg, int bgb, bool showGlobalCoord)
+void ZarrShow2U8(const PatchConfig& config, ZARR_1_b700 *za, int xcoord, int ycoord, int zcoord, int width, int height, const std::string &tifName, std::vector<Patch *> patches, std::set<Patch *> &shown, int bgr, int bgg, int bgb, bool showGlobalCoord)
 {
     uint32_t *pointBuffer;
 
@@ -144,7 +148,8 @@ void ZarrShow2U8(ZARR_1_b700 *za, int xcoord, int ycoord, int zcoord, int width,
 
 	{
 		std::stringstream oss;
-		oss << OUTPUT_DIR << "/tifbuf/t_" << std::setfill('0') << std::setw(8) << zcoord << ".tif";
+		// oss << OUTPUT_DIR << "/tifbuf/t_" << std::setfill('0') << std::setw(8) << zcoord << ".tif";
+		oss << config.outputDir << "/tifbuf/t_" << std::setfill('0') << std::setw(8) << zcoord << ".tif";
 		LoadOrCreateTiffIntoBuffer(za,pointBuffer,xcoord,ycoord,zcoord,width,height,oss.str());
 	}
 	

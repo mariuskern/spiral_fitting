@@ -1,6 +1,9 @@
 # Modified in October 2026 to make the generated configuration depend on the
 # environment file, parse_parameters.py as well as parameters.json, ensuring that changes to
 # environment variable overrides trigger regeneration of parameters.h.
+# Added patch_config.h and parameters.h dependencies for simpaper10.o,
+# anneal.o, omissiontest.o, visitorder.o, scoreplacement.o, zarr_show2_u8.o,
+# and sliceanimrender.o.
 
 
 
@@ -10,6 +13,8 @@ LFLAGS=-lblosc2 -ltiff -L/usr/local/lib -I/usr/local/include
 
 simpaper10: common_types.o patch_generator.o simpaper10.o zarr_1.o zarr_1_b700.o bigpatch.o align_patches.o erasepoints.o badpatchfinder.o zarr_show2_u8.o sliceanimrender.o position_patches.o calcvectorfield.o patchcolourkey.o PatchSpringSimulation.o anneal.o visitorder.o scoreplacement.o omissiontest.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LFLAGS)
+
+simpaper10.o anneal.o omissiontest.o visitorder.o scoreplacement.o zarr_show2_u8.o sliceanimrender.o: patch_config.h parameters.h
 
 PatchSpringSimulation.o: PatchSpringSimulation.cpp PatchSpringSimulation.hpp
 	$(CC) -c $< $(CFLAGS)

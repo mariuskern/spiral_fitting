@@ -61,7 +61,7 @@ The original, unmodified code can be found in `original_code/`.
     python utils/get_axis.py --surface <path_to_surface_prediction> --seed <x> <y> <z>
     ```
 
-4. Create a `.env` file with the following values (from the previous steps)
+4. Create a `.env` file in the repository root (`../.env` relative to this folder) with the following values (from the previous steps)
 
     ```bash
     OUTPUT_DIR=
@@ -78,7 +78,7 @@ The original, unmodified code can be found in `original_code/`.
     SEED_AXIS2_Z=
     ```
 
-    Alternatively, you can specify the output directory and seed coordinates when launching the scroll-reading code, as described in the next step.
+    Alternatively, you can specify the output directory and seed coordinates when launching the scroll-reading code, as described in the next steps.
 
 <!-- 5. Create the output directory, and within it make the folders `surface.bp/surface` and `boundary.bp/surface` and `patches` -->
 
@@ -98,7 +98,13 @@ The original, unmodified code can be found in `original_code/`.
     ./simpaper10 g --output-dir <output-path> --seed <X> <Y> <Z> --axis1 <X> <Y> <Z> --axis2 <X> <Y> <Z>
     ```
 
-    The values provided as command-line arguments will override the values specified in the `.env` file.
+    Configuration is applied in this order (later values override earlier ones):
+
+    1. `parameters.json` supplies the defaults.
+    2. During `make`, `parse_parameters.py` loads `../.env` and writes the effective values to `parameters.h` and `parameters.py`. Values from `.env` override matching defaults in `parameters.json`. Variables already exported in the shell take precedence over `.env`.
+    3. When starting `simpaper10`, `--output-dir`, `--seed`, `--axis1`, and `--axis2` override the generated defaults for that invocation. Omitted options keep their generated defaults.
+
+    Run `make` from this folder after changing `.env` or `parameters.json` so the generated configuration and executable are updated. `simpaper10` does not read `.env` or environment variables at runtime. Pass the same command-line overrides to each pipeline command that needs them; they are not saved between invocations.
 
     If you get an error saying `Aborting, too few points added` use a larger component.
 

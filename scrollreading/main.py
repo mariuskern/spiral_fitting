@@ -2,6 +2,7 @@ import os
 import argparse
 import json
 import subprocess
+import shutil
 import sys
 from pathlib import Path
 
@@ -25,13 +26,15 @@ CSV2TIFXYZ = ROOT / "csv2tifxyz"
 # CSV2TIFXYZ = Path(".") / "csv2tifxyz"
 
 
-def run_command(command):
+def run_command(command, *, input_text=None):
     """Run a command and raise an error if it fails."""
     print(f"\n--> Running: {' '.join(map(str, command))}")
 
     subprocess.run(
         command,
         # cwd=cwd,
+        input=input_text,
+        text=True,
         check=True,
     )
 
@@ -93,20 +96,22 @@ def main():
     if not input_zarr.exists():
         parser.error(f"Input ZARR does not exist: {input_zarr}")
 
-    if not SIM_PAPER.is_file():
-        parser.error(f"simpaper10 not found: {SIM_PAPER}")
-
-    try:
-        seeds = find_seeds(input_zarr, args.output_dir)
-    except Exception as exc:
-        sys.exit(f"ERROR while finding seeds: {exc}")
+    for executable in (SIM_PAPER, BIN2CSV, CSV2TIFXYZ):
+        if not executable.is_file():
+            parser.error(f"Executable not found: {executable}")
 
     output_root = Path(args.output_dir).resolve()
     output_root.mkdir(parents=True, exist_ok=True)
 
+    try:
+        seeds = find_seeds(input_zarr, output_root)
+    except Exception as exc:
+        sys.exit(f"ERROR while finding seeds: {exc}")
+
     print(f"\n--> Found {len(seeds)} unique seeds.")
 
     successful = []
+    successful_outputs = []
     failed = []
 
     for index, (x, y, z) in enumerate(seeds, start=1):
@@ -159,16 +164,16 @@ def main():
                 "--output-dir", str(seed_output),
             ])
 
-            # Flatten the resulting surface
-            # run_command([
-            #     str(SIM_PAPER),
-            #     "f", "30",
-            #     "--output-dir", str(seed_output),
-            # ])
+            # Flatten once, then quit the interactive f command.
+            run_command([
+                str(SIM_PAPER),
+                "f", "30",
+                "--output-dir", str(seed_output),
+            ], input_text="next\nq\n")
 
-            # Convert binary patch to CSV
-            bin_file = seed_output / "patches" / "patch_0.bin"
-            csv_file = seed_output / "patches" / "patch_0.csv"
+            # Convert the flattened surface, not an individual source patch.
+            bin_file = seed_output / "patch_0.bin"
+            csv_file = seed_output / "patch_0.csv"
 
             print("--> Converting BIN to CSV...")
             with open(csv_file, "w") as f:
@@ -186,9 +191,20 @@ def main():
             )
 
             successful.append((x, y, z))
+            successful_outputs.append(seed_output)
         except subprocess.CalledProcessError as exc:
             print(f"ERROR: Seed ({x}, {y}, {z}) failed with exit code {exc.returncode}.")
             failed.append((x, y, z))
+
+    # Collect the TIF/XYZ files from this run's successful seeds.
+    collected_dir = output_root / "patches"
+    collected_dir.mkdir(parents=True, exist_ok=True)
+    for seed_output in successful_outputs:
+        patch_dir = collected_dir / seed_output.name
+        patch_dir.mkdir(parents=True, exist_ok=True)
+        for filename in ("meta.json", "x.tif", "y.tif", "z.tif"):
+            shutil.copy2(seed_output / "patch_0" / filename, patch_dir / filename)
+    print(f"\n--> Collected patches: {collected_dir}")
 
     print("\n--> Processing finished.")
     print(f"Successful: {len(successful)}/{len(seeds)}")

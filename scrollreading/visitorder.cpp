@@ -1,3 +1,6 @@
+// Modified in October 2026 to additionally accept a const PatchConfig reference.
+
+#include "patch_config.h"
 #include <fstream>
 #include <vector>
 #include <map>
@@ -54,7 +57,8 @@ std::vector<std::pair<int,int>> getComponents(const std::map<int, std::set<int>>
     return components;
 }
 
-void MakeVisitOrder(AlignmentMap *am, std::map<int,Patch> *patches,std::set<int> &badPatches,std::set<std::pair<int,int>> &manualBadRel, std::vector<int> &patchOrder, std::vector<std::pair<int,alignment>> &alignmentOrder,std::map<int,affineTx> &patchPositions, std::map<int,std::set<int> > &neighbourList, bool showSize=false, bool saveOutput = true)
+// void MakeVisitOrder(AlignmentMap *am, std::map<int,Patch> *patches,std::set<int> &badPatches,std::set<std::pair<int,int>> &manualBadRel, std::vector<int> &patchOrder, std::vector<std::pair<int,alignment>> &alignmentOrder,std::map<int,affineTx> &patchPositions, std::map<int,std::set<int> > &neighbourList, bool showSize=false, bool saveOutput = true)
+void MakeVisitOrder(const PatchConfig& config, AlignmentMap *am, std::map<int,Patch> *patches,std::set<int> &badPatches,std::set<std::pair<int,int>> &manualBadRel, std::vector<int> &patchOrder, std::vector<std::pair<int,alignment>> &alignmentOrder,std::map<int,affineTx> &patchPositions, std::map<int,std::set<int> > &neighbourList, bool showSize=false, bool saveOutput = true)
 {
 		int minPatchInNeighbourList = -1;
 		
@@ -128,7 +132,8 @@ void MakeVisitOrder(AlignmentMap *am, std::map<int,Patch> *patches,std::set<int>
 
 		if (saveOutput)
 		{
-			std::ofstream os(OUTPUT_DIR "/patchorder.csv");
+			// std::ofstream os(OUTPUT_DIR "/patchorder.csv");
+			std::ofstream os(OutputPath(config, "patchorder.csv"));
 			for (auto i : patchOrder)
 			{
 				os << i << std::endl;
@@ -141,7 +146,8 @@ void MakeVisitOrder(AlignmentMap *am, std::map<int,Patch> *patches,std::set<int>
 }
 
 // version of MakeVisitOrder that will output data for the N largest components...
-int MakeVisitOrders(int N, AlignmentMap *am, std::map<int,Patch> *patches,std::set<int> &badPatches,std::set<std::pair<int,int>> &manualBadRel, std::vector< std::vector<int>> &patchOrders, std::vector<std::vector<std::pair<int,alignment>>> &alignmentOrders,std::vector<std::map<int,affineTx>> &patchPositionss, std::map<int,std::set<int> > &neighbourList, bool showSize=false, bool saveOutput = true)
+// int MakeVisitOrders(int N, AlignmentMap *am, std::map<int,Patch> *patches,std::set<int> &badPatches,std::set<std::pair<int,int>> &manualBadRel, std::vector< std::vector<int>> &patchOrders, std::vector<std::vector<std::pair<int,alignment>>> &alignmentOrders,std::vector<std::map<int,affineTx>> &patchPositionss, std::map<int,std::set<int> > &neighbourList, bool showSize=false, bool saveOutput = true)
+int MakeVisitOrders(const PatchConfig& config, int N, AlignmentMap *am, std::map<int,Patch> *patches,std::set<int> &badPatches,std::set<std::pair<int,int>> &manualBadRel, std::vector< std::vector<int>> &patchOrders, std::vector<std::vector<std::pair<int,alignment>>> &alignmentOrders,std::vector<std::map<int,affineTx>> &patchPositionss, std::map<int,std::set<int> > &neighbourList, bool showSize=false, bool saveOutput = true)
 {
 		int minPatchInNeighbourList = -1;
 		
@@ -225,7 +231,8 @@ int MakeVisitOrders(int N, AlignmentMap *am, std::map<int,Patch> *patches,std::s
 			
 			if (saveOutput)
 			{
-				std::ofstream os(OUTPUT_DIR "/patchorder.csv");
+				// std::ofstream os(OUTPUT_DIR "/patchorder.csv");
+				std::ofstream os(OutputPath(config, "patchorder.csv"));
 				for (auto i : patchOrder)
 				{
 					os << i << std::endl;
@@ -244,7 +251,8 @@ int MakeVisitOrders(int N, AlignmentMap *am, std::map<int,Patch> *patches,std::s
 
 		if (saveOutput)
 		{
-			std::ofstream os(OUTPUT_DIR "/patchorders.csv");
+			// std::ofstream os(OUTPUT_DIR "/patchorders.csv");
+			std::ofstream os(OutputPath(config, "patchorders.csv"));
 			for (auto &i : patchOrders)
 			{
 				os << "NEW" << endl;
