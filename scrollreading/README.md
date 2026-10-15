@@ -78,52 +78,54 @@ The original, unmodified code can be found in `original_code/`.
     SEED_AXIS2_Z=
     ```
 
+    Relative `OUTPUT_DIR`, `VOLUME_ZARR`, and `SURFACE_ZARR` paths in `.env` are resolved against `scrollreading/`, independent of the working directory. For example, `OUTPUT_DIR=out` selects `scrollreading/out`, and `SURFACE_ZARR=../data/surface.zarr` selects `data/surface.zarr` in the repository root. `main.py` also uses `OUTPUT_DIR` as its default output directory.
+
     Alternatively, you can specify the output directory and seed coordinates when launching the scroll-reading code, as described in the next steps.
 
 <!-- 5. Create the output directory, and within it make the folders `surface.bp/surface` and `boundary.bp/surface` and `patches` -->
 
-5. Run make
+5. Build the programs from `scrollreading/`
 
     ```bash
-    make
+    make -C pipeline
     ```
 
 6. Run the pipeline
 
     <!-- ```bash
-    ./simpaper10 g 100
+    ./pipeline/simpaper10 g 100
     ``` -->
 
     ```bash
-    ./simpaper10 g --output-dir <output-path> --seed <X> <Y> <Z> --axis1 <X> <Y> <Z> --axis2 <X> <Y> <Z>
+    ./pipeline/simpaper10 g --output-dir <output-path> --seed <X> <Y> <Z> --axis1 <X> <Y> <Z> --axis2 <X> <Y> <Z>
     ```
 
     Configuration is applied in this order (later values override earlier ones):
 
-    1. `parameters.json` supplies the defaults.
+    1. `pipeline/parameters.json` supplies the defaults.
     2. During `make`, `parse_parameters.py` loads `../.env` and writes the effective values to `parameters.h` and `parameters.py`. Values from `.env` override matching defaults in `parameters.json`. Variables already exported in the shell take precedence over `.env`.
     3. When starting `simpaper10`, `--output-dir`, `--seed`, `--axis1`, and `--axis2` override the generated defaults for that invocation. Omitted options keep their generated defaults.
 
-    Run `make` from this folder after changing `.env` or `parameters.json` so the generated configuration and executable are updated. `simpaper10` does not read `.env` or environment variables at runtime. Pass the same command-line overrides to each pipeline command that needs them; they are not saved between invocations.
+    Run `make -C pipeline` from this folder after changing `.env` or `parameters.json` so the generated configuration and executable are updated. `simpaper10` does not read `.env` or environment variables at runtime. Pass the same command-line overrides to each pipeline command that needs them; they are not saved between invocations.
 
     If you get an error saying `Aborting, too few points added` use a larger component.
 
     Additional commands:
 
     ```bash
-    ./simpaper10 c    # Check patches and create badpatches.csv
-    ./simpaper10 l    # Output 3D coordinates of patch centers
-    ./simpaper10 v    # Generate visit order and initial 2D placement
-    ./simpaper10 h      # Refine positions using a ball-and-spring model
-    ./simpaper10 f 30   # Flatten surface -> OUTPUT_DIR/patch_0.bin
+    ./pipeline/simpaper10 c    # Check patches and create badpatches.csv
+    ./pipeline/simpaper10 l    # Output 3D coordinates of patch centers
+    ./pipeline/simpaper10 v    # Generate visit order and initial 2D placement
+    ./pipeline/simpaper10 h      # Refine positions using a ball-and-spring model
+    ./pipeline/simpaper10 f 30   # Flatten surface -> OUTPUT_DIR/patch_0.bin
     ```
 
     `patch_0.bin` contains binary ux, uy, vx, vy, vz data. Convert it to CSV with `bin2csv`, then to tifxyz with `csv2tifxyz`.
 
     ```bash
-    make bin2csv
-    ./bin2csv out/patch_0.bin > out/patch_0.csv
+    make -C pipeline bin2csv
+    ./pipeline/bin2csv out/patch_0.bin > out/patch_0.csv
 
-    g++ csv2tifxyz.cpp -o csv2tifxyz -ltiff
-    ./csv2tifxyz out/patch_0.csv out/patch_0
+    g++ pipeline/csv2tifxyz.cpp -o pipeline/csv2tifxyz -ltiff
+    ./pipeline/csv2tifxyz out/patch_0.csv out/patch_0
     ```

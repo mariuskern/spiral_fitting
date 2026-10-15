@@ -53,7 +53,7 @@ build-*/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
-Makefile
+# Makefile
 install_manifest.txt
 compile_commands.json
 

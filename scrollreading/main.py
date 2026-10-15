@@ -7,18 +7,21 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-load_dotenv()
-for key in ["VOLUME_ZARR", "SURFACE_ZARR"]:
-    if key in os.environ:
-        os.environ[key] = os.path.expandvars(os.environ[key])
-
 
 ROOT = Path(__file__).resolve().parent
+PIPELINE = ROOT / "pipeline"
+
+load_dotenv(ROOT.parent / ".env")
+for key in ["OUTPUT_DIR", "VOLUME_ZARR", "SURFACE_ZARR"]:
+    if key in os.environ:
+        path = Path(os.path.expandvars(os.environ[key])).expanduser()
+        os.environ[key] = (ROOT / path).resolve().as_posix()
+
 
 SEED_SCRIPT = ROOT / "utils" / "get_seed_points.py"
-SIM_PAPER = ROOT / "simpaper10"
-BIN2CSV = ROOT / "bin2csv"
-CSV2TIFXYZ = ROOT / "csv2tifxyz"
+SIM_PAPER = PIPELINE / "simpaper10"
+BIN2CSV = PIPELINE / "bin2csv"
+CSV2TIFXYZ = PIPELINE / "csv2tifxyz"
 
 # SEED_SCRIPT = Path(".") / "utils" / "get_seed_points.py"
 # SIM_PAPER = Path(".") / "simpaper10"
@@ -85,7 +88,7 @@ def main():
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default="out",
+        default=os.environ.get("OUTPUT_DIR", str(ROOT / "out")),
         help="Base directory for per-seed output",
     )
 

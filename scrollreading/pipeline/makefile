@@ -73,7 +73,7 @@ erasepoints.o : erasepoints.cpp erasepoints.h bigpatch.h common_types.h paramete
 badpatchfinder.o : badpatchfinder.cpp badpatchfinder.h common_types.h parameters.h
 	$(CC) -c $< $(CFLAGS)
 
-parameters.h : parameters.json ../.env parse_parameters.py
+parameters.h : parameters.json ../../.env parse_parameters.py
 	python parse_parameters.py
 
 

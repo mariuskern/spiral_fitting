@@ -12,17 +12,21 @@
 # floating-point values even when the corresponding value in parameters.json
 # is an integer. Numeric environment values are converted to int when
 # possible and to float otherwise.
+# Relative environment paths are resolved against the scrollreading folder.
 
 
 import json
 import os
+from pathlib import Path
 
 
 from dotenv import load_dotenv
-load_dotenv()
+SCROLLREADING = Path(__file__).resolve().parent.parent
+load_dotenv(SCROLLREADING.parent / ".env")
 for key in ["OUTPUT_DIR", "VOLUME_ZARR", "SURFACE_ZARR"]:
     if key in os.environ:
-        os.environ[key] = os.path.expandvars(os.environ[key])
+        path = Path(os.path.expandvars(os.environ[key])).expanduser()
+        os.environ[key] = (SCROLLREADING / path).resolve().as_posix()
 
 
 def get_value(key, value):
