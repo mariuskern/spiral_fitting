@@ -46,7 +46,10 @@ python zarr_to_tiff.py <path_to_zarr> <output_path> --array <array>
 
 - `<path_to_zarr>`: Path to the input Zarr volume.
 - `<output_path>`: Output path for the TIFF image stack.
-- `--array`: Specifies the array to convert.
+- `--array`: Specifies the array path inside a Zarr group (default: `0`). If the Zarr volume is itself an array, it is used directly and `--array` is not needed.
+
+Supported volume shapes are `(Z, Y, X)` and `(1, Z, Y, X)`. A leading singleton
+channel dimension is removed during export; slices are read individually.
 
 ### `tiff_to_zarr.py`
 

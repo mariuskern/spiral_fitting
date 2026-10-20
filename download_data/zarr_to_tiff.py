@@ -50,7 +50,7 @@ def _get_arguments():
         "--array",
         type=str,
         default="0",
-        help="Group to convert",
+        help="Array path within a Zarr group (default: 0); not needed for a root array.",
     )
 
     parser.add_argument(
@@ -77,7 +77,7 @@ def convert_zarr(input_dir, output_dir, array, prefix, digits, overwrite, compre
     print("Opening Zarr...")
     z = zarr.open(input_dir, mode="r")
     print("Zarr structure:")
-    print(z.tree())
+    print(z if isinstance(z, zarr.Array) else z.tree())
     print("")
 
 
@@ -85,7 +85,9 @@ def convert_zarr(input_dir, output_dir, array, prefix, digits, overwrite, compre
     # Find volume
     # --------------------------------------------------------
 
-    if array not in z:
+    if isinstance(z, zarr.Array):
+        volume = z
+    elif array not in z:
         available = list(z.keys())
 
         raise ValueError(
@@ -95,20 +97,25 @@ def convert_zarr(input_dir, output_dir, array, prefix, digits, overwrite, compre
             f"{available}"
         )
 
-    volume = z[array]
+    else:
+        volume = z[array]
+
+    if not isinstance(volume, zarr.Array):
+        raise ValueError(f"'{array}' is a Zarr group, not an array. Use --array to select a 3D array within it.")
 
 
     # --------------------------------------------------------
     # Check dimensions
     # --------------------------------------------------------
 
-    if volume.ndim != 3:
+    single_channel = volume.ndim == 4 and volume.shape[0] == 1
+    if volume.ndim != 3 and not single_channel:
         raise ValueError(
-            f"Expected a 3D volume with shape (Z, Y, X), but got:\n"
+            f"Expected shape (Z, Y, X) or (1, Z, Y, X), but got:\n"
             f"{volume.shape}"
         )
 
-    d, _, _ = volume.shape
+    d = volume.shape[1] if single_channel else volume.shape[0]
 
     print(f"Volume shape:     {volume.shape}")
     print(f"Dtype:            {volume.dtype}")
@@ -160,7 +167,8 @@ def convert_zarr(input_dir, output_dir, array, prefix, digits, overwrite, compre
 
     # exit()
 
-    tif = tifffile.TiffWriter(output_dir / f"{output_dir.name}.tif", bigtiff=True)
+    # tif = tifffile.TiffWriter(output_dir / f"{output_dir.name}.tif", bigtiff=True)
+    tif = tifffile.TiffWriter(output_dir / f"{output_dir.name}.tif", bigtiff=False)
 
     for i in tqdm(range(d), desc=f"Converting", unit="slice"):
         output_file = layers_dir / f"{prefix}{i:0{digits}d}.tif"
@@ -172,7 +180,7 @@ def convert_zarr(input_dir, output_dir, array, prefix, digits, overwrite, compre
         # image = np.asarray(volume[i, :, :])
 
         try:
-            image = np.asarray(volume[i, :, :])
+            image = np.asarray(volume[0, i, :, :] if single_channel else volume[i, :, :])
         except Exception as e:
             print("")
             print("=" * 70)
