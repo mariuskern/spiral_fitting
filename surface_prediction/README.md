@@ -5,9 +5,11 @@ blending, and finalization in sequence and stops if a step fails.
 
 ## Sources
 
-This folder contains code from [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/8aa507c1215f1fa8758f13d0538f7af9710e02d7)
-(Commit: 8aa507c). The original, unmodified code is in
-`villa_8aa507c/original_code/`.
+This folder contains code from the following GitHub repository:
+
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/8aa507c1215f1fa8758f13d0538f7af9710e02d7) (Commit: 8aa507c)
+
+The original, unmodified code is in `villa_8aa507c/original_code/`.
 
 ## Getting Started
 
