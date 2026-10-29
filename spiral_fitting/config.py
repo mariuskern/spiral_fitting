@@ -9,16 +9,20 @@ from pathlib import Path
 DEFAULT_GAP_EXPANDER_CAPACITY = 144
 
 
+def filter_known_config_keys(values, allowed, *, label, warn=print):
+    """Copy client settings, reporting keys absent from the current schema."""
+    unknown = sorted(set(values) - set(allowed))
+    if unknown:
+        warn(f"Ignoring unknown {label} keys: {unknown}")
+    return {key: value for key, value in values.items() if key in allowed}
+
+
 _ENUMS = {
     "model_flow_integration_solver": ["rk4"],
-    "model_flow_field_type": ["cartesian", "cylindrical"],
-    "track_crossing_mode": ["count", "track_walk"],
+    "model_flow_field_type": ["cartesian", "cylindrical", "bspline", "bspline_cylindrical"],
     "track_radius_target": ["mean", "median"],
-    "dense_spacing_mode": ["phase", "grad_mag", "winding_model"],
-    "dense_spacing_support_policy": ["product", "minimum"],
+    "dense_spacing_mode": ["grad_mag", "winding_model"],
     "dt_target_mode": ["strip_median", "whole_object_quantile"],
-    "dense_spacing_density_lambda": [
-        "inverse_gap", "soft_mass", "soft_mass_wide"],
 }
 
 _NULL_TYPES = {
@@ -26,36 +30,37 @@ _NULL_TYPES = {
     "track_length_bin_weights": "vector",
     "track_max_tortuosity": "number",
     "loss_start_track_dt": "integer",
-    "loss_start_unverified_patch_dt": "number",
+    "loss_start_unattached_pcl_dt": "integer",
     "patch_uuid_filter_regex": "string",
 }
 
+# Settings host preparation consumes irreversibly: the patch loader erodes and
+# filters entries before they reach the resident pools, and the dense-spacing
+# mode decides which dense stores are opened. Nothing retained by a resident
+# session can re-derive their effect, so they demand a full rebuild.
 _PREPARED_INPUT_FIELDS = {
     "patch_erode_patches",
     "patch_uuid_filter_regex",
-    "track_crossing_precompute_max",
-    "track_crossing_mode",
-    "track_exclusion_radius",
     "dense_spacing_mode",
-    "loss_weight_fiber_directions",
-    "output_first_winding",
-    "output_winding_margin",
-    "output_step_size",
-    "output_num_slices_for_visualization",
-    # These values define the discretised outer-shell lookup/atlas. Unlike
-    # ordinary shell loss parameters they cannot be changed on an existing
-    # prepared shell.
+}
+
+# The discretised outer-shell lookup/atlas. These are ordinary run-boundary
+# settings while the resident session only rebuilds its shell polar map from
+# them, but a session whose tracks were filtered against the shell at load
+# (a tracks store and an outer shell both present) consumed them irreversibly:
+# apply_config refuses them there, and a model-only rebuild applies run
+# changes through apply_config before it releases the model, so such a
+# session needs the full rebuild (see rebuild_stage).
+SHELL_ATLAS_KEYS = frozenset({
     "shell_num_theta_bins",
     "shell_table_smooth_sigma_z",
     "shell_table_smooth_sigma_theta",
     "shell_min_confidence",
-}
+})
 
 _SCALE_WITH_Z_FIELDS = {
     "sample_count_patches_per_step",
     "sample_count_patches_per_step_for_dt",
-    "sample_count_unverified_patches_per_step",
-    "sample_count_unverified_patches_per_step_for_dt",
     "sample_count_relative_winding_pcls",
     "sample_count_absolute_winding_pcls",
     "sample_count_unattached_pcls_per_step",
@@ -63,22 +68,19 @@ _SCALE_WITH_Z_FIELDS = {
     "sample_count_dense_normal_points",
     "sample_count_fiber_direction_points",
     "sample_count_regularisation_points",
-    "sample_count_dense_spacing_pairs",
-    "sample_count_dense_spacing_density_extra_pairs",
     "sample_count_winding_model_relative_pairs",
     "sample_count_winding_model_density_pairs",
     "sample_count_minimum_spacing_independent_samples",
-    "sample_count_dense_attachment_points",
     "sample_count_shell_samples",
 }
 
 
-# z_begin/z_end are deliberately heavyweight settings; their metadata records
-# every effect so nothing treats them as cheap run-boundary knobs:
+# z_begin/z_end are deliberately heavyweight settings, always classified as
+# new-fit settings so nothing treats them as cheap run-boundary knobs:
 #   - host input filtering: patches, PCLs, unattached strips, and tracks are
 #     loaded/kept only where they intersect [z_begin, z_end);
-#   - dense-store coverage: the Lasagna normal/grad-mag and surf-SDT brick
-#     pools are materialised for exactly this z window;
+#   - dense-store coverage: the Lasagna normal/grad-mag brick pools are
+#     materialised for exactly this z window;
 #   - count scaling: every scale_with_z sample count is scaled by the number
 #     of slices in the range relative to the 9500-slice reference;
 #   - rendering/preview: the preview/export z window and the output-directory
@@ -86,85 +88,77 @@ _SCALE_WITH_Z_FIELDS = {
 #   - model/checkpoint-domain compatibility: the flow-field parameter shapes
 #     cover the range (plus margin), so resuming a checkpoint requires the
 #     optimisation range to lie within the checkpoint's stored model z-range.
-_Z_RANGE_DESCRIPTIONS = {
-    "z_begin": "First z slice (inclusive) of the fit. Affects host input "
-               "filtering, dense-store coverage, per-step count scaling, "
-               "rendering, and model/checkpoint z-domain compatibility.",
-    "z_end": "One past the last z slice of the fit. Affects host input "
-             "filtering, dense-store coverage, per-step count scaling, "
-             "rendering, and model/checkpoint z-domain compatibility.",
-}
+_Z_RANGE_KEYS = frozenset({"z_begin", "z_end"})
 
-_INPUT_TOGGLE_DESCRIPTIONS = {
-    "input_use_verified_patches":
-        "Load verified patches and allow their radius/DT supervision.",
-    "input_use_unverified_patches":
-        "Load unverified patches and allow their radius/DT supervision.",
-    "input_use_tracks":
-        "Load tracks and allow track sampling and losses.",
-    "input_use_fibers":
-        "Load fiber annotations into the point-collection supervision pools.",
-    "input_use_fiber_directions":
-        "Load packed fiber-direction samples and allow their orientation loss.",
-    "input_use_pcl_absolute":
-        "Load absolute-winding point-collection inputs.",
-    "input_use_pcl_relative":
-        "Load relative-winding point-collection inputs.",
-    "input_use_pcl_same_winding":
-        "Load same-winding point-collection inputs.",
-    "input_use_pcl_drawn_control_points":
-        "Load drawn-control-point point-collection inputs.",
-    "input_use_normals":
-        "Allow dense normal stores, sampling, and normal-dependent losses.",
-    "input_use_surf_sdt":
-        "Allow the surface-SDT store and SDT-dependent phase losses.",
-    "input_use_gradient_magnitude":
-        "Allow gradient-magnitude dense-spacing supervision.",
-    "input_use_winding_inference":
-        "Allow compact winding-inference supervision.",
-    "input_use_outer_shell":
-        "Allow outer-shell losses, lookup maps, and shell-based track filtering.",
-}
-
-# These fields were added after durable checkpoints already existed. Missing
-# values are unambiguous: historical fits used every available input, so a
-# missing toggle means True. Checkpoint readers use this mapping instead of
-# weakening strict schema checks for unrelated future fields.
-BACKFILLABLE_CONFIG_DEFAULTS = {
-    key: True for key in _INPUT_TOGGLE_DESCRIPTIONS
-}
-BACKFILLABLE_CONFIG_DEFAULTS.update({
-    # Historical checkpoints used an unbounded exponential gap map and used
-    # model_gap_expander_num_windings for both the physical estimate and the
-    # allocated lattice extent.  The checkpoint loader migrates their tensors;
-    # these defaults make the added semantic fields schema-compatible too.
-    "model_gap_expander_capacity_windings": DEFAULT_GAP_EXPANDER_CAPACITY,
-    "model_gap_expander_min_gap": 1.0,
-    "model_gap_expander_softplus_bias": 4.0,
+# Participation toggles: whether a supervision source is loaded at all.
+_INPUT_TOGGLE_KEYS = frozenset({
+    "input_use_verified_patches",
+    "input_use_tracks",
+    "input_use_fibers",
+    "input_use_fiber_directions",
+    "input_use_pcl_absolute",
+    "input_use_pcl_relative",
+    "input_use_pcl_same_winding",
+    "input_use_pcl_drawn_control_points",
+    "input_use_normals",
+    "input_use_gradient_magnitude",
+    "input_use_winding_inference",
+    "input_use_outer_shell",
 })
 
-_GAP_EXPANDER_DESCRIPTIONS = {
-    "model_gap_expander_num_windings": (
-        "Legacy/fallback physical winding-count estimate used by exporters; "
-        "it does not allocate the gap lattice."),
-    "model_gap_expander_capacity_windings": (
-        "Allocated gap-lattice capacity, not a claim about the physical "
-        "winding count. Must be at least shell_outer_winding_idx + 3."),
-    "model_gap_expander_min_gap": (
-        "Hard numerical inter-winding gap floor in working voxels. The "
-        "minimum-spacing loss remains the separate geological preference."),
-    "model_gap_expander_softplus_bias": (
-        "Bias of the stable lower-bounded softplus gap parameterisation."),
-}
+# Human-readable descriptions of the configuration keys (and of VC3D's Spiral
+# panel controls) live in descriptions.json beside this module, so the text
+# can be edited without touching code; see config_descriptions().
+DESCRIPTIONS_PATH = Path(__file__).with_name("descriptions.json")
+
+
+def config_descriptions(path=DESCRIPTIONS_PATH, *, warn=print):
+    """Return {config key: description} from the descriptions file.
+
+    The file is read on every call, so edited text reaches a client on its
+    next catalog fetch without restarting the service. Descriptions are
+    presentation only: a missing or malformed file leaves the catalog
+    undescribed instead of failing it.
+    """
+    try:
+        section = json.loads(Path(path).read_text(encoding="utf-8"))["config"]
+        items = section.items()
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        warn(f"Spiral configuration descriptions unavailable ({path}): {error}")
+        return {}
+    return {key: text.strip() for key, text in items
+            if isinstance(text, str) and text.strip()}
+
+
+def describe_catalog(catalog, descriptions=None):
+    """Return a copy of catalog whose field specs carry current descriptions."""
+    if descriptions is None:
+        descriptions = config_descriptions()
+    schema = dict(catalog["schema"])
+    for section in ("fields", "run_fields"):
+        described = {}
+        for key, spec in schema[section].items():
+            spec = {name: value for name, value in spec.items()
+                    if name != "description"}
+            if key in descriptions:
+                spec["description"] = descriptions[key]
+            described[key] = spec
+        schema[section] = described
+    return {**catalog, "schema": schema}
+
 
 # Configuration keys that shape the model's parameter tensors. A checkpoint
 # whose stored value for any of them differs describes a different model, and
 # is refused rather than reshaped: a domain/structure change is the explicit
 # rebuild path's job. Configuration metadata, so it lives here beside the
 # rest of it and is readable without importing the fitter.
+# model_num_flow_integration_steps is deliberately absent: the RK4 step count
+# changes the map a fixed parameter set produces (by the discretisation
+# difference) but reshapes nothing, so it is a run-boundary setting and a
+# checkpoint written under another count loads with a printed notice.
 CHECKPOINT_MODEL_SHAPE_KEYS = (
-    "model_num_flow_integration_steps", "model_flow_integration_solver",
-    "model_num_flow_timesteps", "model_flow_bounds_z_margin",
+    "model_flow_integration_solver",
+    "model_num_flow_stages", "model_flow_bounds_z_margin",
     "model_flow_bounds_radius", "model_flow_voxel_resolution",
     "model_flow_field_type", "model_gap_expander_logit_resolution",
     "model_gap_expander_capacity_windings",
@@ -172,6 +166,7 @@ CHECKPOINT_MODEL_SHAPE_KEYS = (
     "model_gap_expander_min_gap", "model_gap_expander_softplus_bias",
     "model_initial_dr_per_winding", "model_linear_z_resolution",
 )
+
 
 
 # Configuration keys whose every consumer is built by
@@ -189,53 +184,155 @@ CHECKPOINT_MODEL_SHAPE_KEYS = (
 # Both are therefore absent, and a key nobody has audited is absent by
 # construction — the safe answer.
 MODEL_STAGE_KEYS = frozenset({
-    "model_num_flow_integration_steps",
     "model_flow_integration_solver",
-    "model_num_flow_timesteps",
     "model_num_flow_stages",
     "model_flow_bounds_radius",
     "model_flow_voxel_resolution",
     "model_flow_field_type",
-    "model_flow_field_high_res_lr_scale_initial",
-    "model_flow_field_high_res_lr_scale_final",
-    "model_flow_field_high_res_lr_ramp_start_step",
-    "model_flow_field_high_res_lr_ramp_steps",
     "model_flow_field_direct_lr",
     "model_gap_expander_logit_resolution",
-    "model_gap_expander_num_windings",
     "model_gap_expander_capacity_windings",
     "model_gap_expander_min_gap",
     "model_gap_expander_softplus_bias",
     "model_gap_expander_lr_scale",
     "model_linear_z_resolution",
     "model_initial_dr_per_winding",
-    "model_sym_dirichlet_finite_difference_epsilon",
 })
 
+_MODEL_STRUCTURE_KEYS = frozenset({
+    "model_flow_integration_solver",
+    "model_num_flow_stages",
+    "model_flow_bounds_z_margin",
+    "model_flow_bounds_radius",
+    "model_flow_voxel_resolution",
+    "model_flow_field_type",
+    "model_flow_field_direct_lr",
+    "model_gap_expander_logit_resolution",
+    "model_gap_expander_capacity_windings",
+    "model_gap_expander_lr_scale",
+    "model_gap_expander_min_gap",
+    "model_gap_expander_softplus_bias",
+    "model_linear_z_resolution",
+    "model_initial_dr_per_winding",
+})
 
-def rebuild_stage(changed_keys):
-    """The build stage a set of changed configuration keys requires.
+_RUN_MUTABLE_MODEL_KEYS = frozenset({
+    "model_flow_field_low_res_lr_scale",
+    "model_num_flow_integration_steps",
+    "model_flow_field_high_res_lr_scale_initial",
+    "model_flow_field_high_res_lr_scale_final",
+    "model_flow_field_high_res_lr_ramp_start_step",
+    "model_flow_field_high_res_lr_ramp_steps",
+    "model_sym_dirichlet_finite_difference_epsilon",
+    "model_gap_expander_num_windings",
+})
 
-    ``"model"`` when every changed key is on MODEL_STAGE_KEYS, ``"all"``
-    otherwise. The stages are one ordinal, not a graph: "all" is the whole
-    build as it has always run, and "model" is a strict suffix of it.
+# input_ keys a resident session applies at a Run boundary: the participation
+# toggles of the editable point-collection roles (same-winding, relative).
+# Their documents are ordinary regular collections, so FitContext.apply_config
+# loads them through the live-incorporation path when a toggle turns on (the
+# dataset's conventional document plus any document the session request
+# named) and drops the role's resident collections when it turns off. The
+# other roles keep their load-time semantics: absolute annotations are
+# consumed by the theta/winding supervision set up at build, and drawn
+# control points have no live add/remove path.
+_RUN_MUTABLE_INPUT_KEYS = frozenset({
+    "input_use_pcl_relative",
+    "input_use_pcl_same_winding",
+})
 
-    Anything unrecognised falls to "all", so this fails safe: a new key gets
-    today's behaviour until somebody audits its consumers.
-    """
-    return "model" if MODEL_STAGE_KEYS.issuperset(changed_keys) else "all"
+# input_ keys: hard participation gates deciding what host preparation loads
+# and which dense stores open. Always a rebuild.
+_INPUT_GATE_KEYS = (_INPUT_TOGGLE_KEYS - _RUN_MUTABLE_INPUT_KEYS) | {
+    "input_disable_patches",
+}
+
+_RUN_MUTABLE_PCL_KEYS = frozenset({
+    "pcl_vertical_fiber_radial_offset_enabled",
+    "pcl_vertical_fiber_radial_offset_voxels",
+    "pcl_rel_winding_adjacent_patches_only",
+    "pcl_stratified_pcl_sampling",
+    "pcl_sampling_weights",
+    "pcl_use_fiber_links",
+    "pcl_use_pending_fiber_links",
+    "pcl_unattached_pcl_min_point_spacing",
+    "pcl_fiber_min_point_spacing",
+    # The fiber link side rules relink every resident fiber (the fiber
+    # catalog is re-linked against the resident patches and its views
+    # re-materialised); see FitContext._relink_fibers_to_patches. The
+    # tolerance and window settings relink every resident collection, regular
+    # and fiber, and re-derive every view from the retained catalogs; see
+    # FitContext._relink_all_points_to_patches.
+    "pcl_fiber_link_side_filter",
+    "pcl_fiber_link_side_margin_voxels",
+    "pcl_fiber_link_model_direction_step",
+    "pcl_link_distance_tolerance",
+    "pcl_link_window_points",
+    "pcl_link_window_min_points",
+})
+
+NEW_FIT_KEYS = frozenset(
+    set(_Z_RANGE_KEYS)
+    | _MODEL_STRUCTURE_KEYS
+    | _INPUT_GATE_KEYS
+    | _PREPARED_INPUT_FIELDS
+    | {"optimizer_random_seed", "pcl_vertical_fiber_min_auto_certainty",
+       "pcl_vertical_fiber_min_z_fraction"}
+)
+
+_AUDITED_PREFIXES = ("model_", "input_", "pcl_")
 
 
 def _runtime_impact(key):
-    if key in _Z_RANGE_DESCRIPTIONS:
-        # Changing the z-range invalidates host inputs, dense stores, and the
-        # model's flow-field domain: a new fit, never a run-boundary tweak.
+    if key in NEW_FIT_KEYS:
         return "new_fit"
-    if key.startswith("model_") or key == "optimizer_random_seed":
-        return "new_fit"
-    if key.startswith(("input_", "pcl_")) or key in _PREPARED_INPUT_FIELDS:
+    if (key in _RUN_MUTABLE_MODEL_KEYS or key in _RUN_MUTABLE_PCL_KEYS
+            or key in _RUN_MUTABLE_INPUT_KEYS):
+        return "run_boundary"
+    if key.startswith(_AUDITED_PREFIXES):
         return "new_fit"
     return "run_boundary"
+
+
+def unaudited_prefixed_keys(keys):
+    """Keys with an audited prefix that no classification table names.
+
+    Such a key is reported as "new_fit" by construction; this exists so the
+    tests (and anyone adding a setting) can see the omission explicitly.
+    """
+    tables = (NEW_FIT_KEYS | _RUN_MUTABLE_MODEL_KEYS | _RUN_MUTABLE_PCL_KEYS
+              | _RUN_MUTABLE_INPUT_KEYS)
+    return sorted(key for key in keys
+                  if key.startswith(_AUDITED_PREFIXES) and key not in tables)
+
+
+_known_keys_cache = None
+
+
+def known_config_keys():
+    """Return every configuration key defined by Config."""
+    global _known_keys_cache
+    if _known_keys_cache is None:
+        _known_keys_cache = frozenset(Config().as_dict())
+    return _known_keys_cache
+
+
+def rebuild_stage(changed_keys, *, shell_filtered_tracks=False):
+    """Return the earliest rebuild stage required by changed settings.
+
+    ``shell_filtered_tracks`` says whether the resident session filtered its
+    tracks against the outer shell when it loaded them; the shell atlas keys
+    are then a full rebuild rather than run-boundary settings.
+    """
+    changed = set(changed_keys)
+    if shell_filtered_tracks and changed & SHELL_ATLAS_KEYS:
+        return "all"
+    known = known_config_keys()
+    demanding = {
+        key for key in changed
+        if key not in known or _runtime_impact(key) != "run_boundary"
+    }
+    return "model" if MODEL_STAGE_KEYS.issuperset(demanding) else "all"
 
 
 def _field_spec(key, default):
@@ -263,6 +360,9 @@ def _field_spec(key, default):
         "label": key.split("_", 1)[-1].replace("_", " ").title(),
         "runtime_impact": _runtime_impact(key),
     }
+    if spec["runtime_impact"] == "new_fit":
+        # The build stage a rebuild changing only this key needs.
+        spec["rebuild_stage"] = "model" if key in MODEL_STAGE_KEYS else "all"
     if kind in ("integer", "number"):
         spec.update(
             minimum=(
@@ -270,6 +370,8 @@ def _field_spec(key, default):
                     "output_num_slices_for_visualization",
                     "theta_crossing_map_update_interval",
                     "dt_target_update_interval",
+                    "pcl_link_window_points",
+                    "pcl_link_window_min_points",
                 } else 0),
             maximum=(1_000_000 if key == "output_num_slices_for_visualization"
                      else 1_000_000_000),
@@ -283,23 +385,18 @@ def _field_spec(key, default):
         spec["length"] = 3 if key == "track_length_bin_weights" else len(default)
     if key in _SCALE_WITH_Z_FIELDS:
         spec["scale_with_z"] = True
-    if key in _Z_RANGE_DESCRIPTIONS:
-        spec["description"] = _Z_RANGE_DESCRIPTIONS[key]
+    if key in _Z_RANGE_KEYS:
         # These values remain part of the resolved/checkpoint configuration,
         # but interactive clients edit them through the run-level z controls,
         # not as independent advanced-JSON settings.
         spec["ui_owner"] = "run"
-    elif key in _INPUT_TOGGLE_DESCRIPTIONS:
-        spec["description"] = _INPUT_TOGGLE_DESCRIPTIONS[key]
-    elif key in _GAP_EXPANDER_DESCRIPTIONS:
-        spec["description"] = _GAP_EXPANDER_DESCRIPTIONS[key]
     return spec
 
 
 class Config:
     def __init__(self, overrides=None):
-        # The optimisation z window (see _Z_RANGE_DESCRIPTIONS for the full
-        # effect list). Defaults match the historical fit_spiral module
+        # The optimisation z window (see _Z_RANGE_KEYS for the full effect
+        # list). Defaults match the historical fit_spiral module
         # globals for the production PHercParis4 dataset.
         self.z_begin = 4000
         self.z_end = 17000
@@ -309,9 +406,22 @@ class Config:
         self.optimizer_exp_lr_schedule = True
         self.optimizer_lr_final_factor = 0.3
         self.optimizer_num_training_steps = 30000
+        # Flow-lattice gradient conditioning (see descriptions.json and
+        # README.md, "Flow-gradient conditioning").
+        # All are read live every step, so they apply at a run boundary
+        # without a rebuild. Off by default.
+        self.optimizer_flow_grad_smoothing = False
+        self.optimizer_flow_grad_smoothing_sigma_voxels = 32.0
+        self.optimizer_flow_grad_smoothing_across_sigma_voxels = 0.0
+        self.optimizer_flow_grad_smoothing_low_res_sigma_voxels = 0.0
+        self.optimizer_flow_lazy_moments = False
+        self.optimizer_flow_shared_second_moment = False
+        self.optimizer_flow_shared_second_moment_clip_quantile = 0.99
+        self.optimizer_flow_grad_clip_median_multiple = 0.0
         self.model_num_flow_integration_steps = 3
         self.model_flow_integration_solver = "rk4"
-        self.model_num_flow_timesteps = 1
+        # Stationary velocity fields composed in sequence, held as the slabs
+        # of the flow lattices' leading axis (see transforms.SpiralAndTransform).
         self.model_num_flow_stages = 2
         self.model_flow_bounds_z_margin = 160
         self.model_flow_bounds_radius = 3200
@@ -321,6 +431,9 @@ class Config:
         self.model_flow_field_high_res_lr_scale_final = 0.2
         self.model_flow_field_high_res_lr_ramp_start_step = 0
         self.model_flow_field_high_res_lr_ramp_steps = 1
+        # Both flow lattices' LRs are optimizer_learning_rate times their
+        # scale; the low-resolution one had no scale of its own before.
+        self.model_flow_field_low_res_lr_scale = 1.0
         self.model_flow_field_direct_lr = True
         self.model_gap_expander_logit_resolution = 24
         # The physical winding estimate and the allocated transform capacity
@@ -349,9 +462,6 @@ class Config:
         self.sample_count_patches_per_step = 360
         self.sample_count_patches_per_step_for_dt = 240
         self.sample_count_points_per_patch = 800
-        self.sample_count_unverified_patches_per_step = 120
-        self.sample_count_unverified_patches_per_step_for_dt = 80
-        self.sample_count_unverified_points_per_patch = 800
         self.sample_count_relative_winding_pcls = 48
         self.sample_count_relative_winding_patch_pairs_per_pcl = 4
         self.sample_count_absolute_winding_pcls = 48
@@ -363,21 +473,12 @@ class Config:
         self.sample_count_dense_normal_points = 60000
         self.sample_count_fiber_direction_points = 60000
         self.sample_count_regularisation_points = 4500
-        self.sample_count_dense_spacing_pairs = 12000
-        self.sample_count_dense_spacing_count_extra_pairs = 0
-        self.sample_count_dense_spacing_density_extra_pairs = 24000
-        self.sample_count_dense_spacing_density_chunk_pairs = 24000
         self.sample_count_winding_model_relative_pairs = 128000
         self.sample_count_winding_model_density_pairs = 128000
         self.sample_count_minimum_spacing_independent_samples = 2000
-        self.sample_count_dense_attachment_points = 20000
         self.sample_count_patch_dt_target_points = 256
         self.sample_count_dt_target_points_per_strip = 512
         self.sample_count_shell_samples = 24576
-        self.sample_count_influence_footprint_points = 2048
-        self.sample_count_influence_anchor_lattice_points = 100000
-        self.sample_count_influence_anchor_geometry_points = 100000
-        self.sample_count_influence_anchor_samples_per_step = 4096
         # Exponent applied to patch areas when building patch sampling
         # probabilities: 0 = uniform, 1 = proportional to area.
         self.patch_sampling_area_exponent = 0.5
@@ -387,7 +488,6 @@ class Config:
         # used by losses. Loss weights and sample counts remain unchanged so
         # re-enabling a source restores its previous tuning.
         self.input_use_verified_patches = True
-        self.input_use_unverified_patches = True
         self.input_use_tracks = False
         self.input_use_fibers = True
         self.input_use_fiber_directions = False
@@ -396,7 +496,6 @@ class Config:
         self.input_use_pcl_same_winding = True
         self.input_use_pcl_drawn_control_points = True
         self.input_use_normals = True
-        self.input_use_surf_sdt = False
         self.input_use_gradient_magnitude = True
         self.input_use_winding_inference = True
         self.input_use_outer_shell = True
@@ -404,18 +503,30 @@ class Config:
         # When set, only patch directory entries (uuid-named) whose name
         # matches this regex (re.search) are loaded; None loads everything.
         self.patch_uuid_filter_regex = None
-        self.patch_unverified_patch_radius_loss_margin = 0.025
-        self.patch_unverified_patch_radius_loss_inv = False
-        self.patch_unverified_patch_radius_within_norm_p = 3.0
-        self.patch_unverified_patch_dt_norm_p = 0.5
-        self.patch_unverified_patch_dt_within_patch_norm_p = 3.0
-        self.patch_unverified_patch_dt_loss_margin = 0.025
-        self.patch_unverified_patch_exclusion_radius = 64.0
         self.pcl_rel_winding_adjacent_patches_only = True
         self.pcl_stratified_pcl_sampling = True
         self.pcl_sampling_weights = None
         self.pcl_fiber_min_point_spacing = 40.0
         self.pcl_unattached_pcl_min_point_spacing = 16.0
+        # Point-to-patch linking (point_collection.link_points_to_patches;
+        # see descriptions.json). Every point attaches to a patch surface
+        # within this many scroll voxels; window_min_points > 1 additionally
+        # requires that many of a centred window of window_points consecutive
+        # points to lie within tolerance of a candidate before it is eligible.
+        self.pcl_link_distance_tolerance = 2.5
+        self.pcl_link_window_points = 1
+        self.pcl_link_window_min_points = 1
+        # Fiber side rules: vertical fibers (on the sheet's back) attach only
+        # to patches in front of them (inward, toward the umbilicus / lower
+        # winding), horizontal fibers (on the sheet's front) only to patches
+        # behind them, each with a margin for points on the surface itself.
+        # The inward direction comes from the umbilicus until
+        # pcl_fiber_link_model_direction_step steps have run, then from the
+        # fitted winding (every fiber relinks once at the switch, or at the
+        # first step after loading a checkpoint that far along).
+        self.pcl_fiber_link_side_filter = False
+        self.pcl_fiber_link_side_margin_voxels = 0.5
+        self.pcl_fiber_link_model_direction_step = 10000
         # Cross-fiber links ("branches"): same-winding continuations between
         # fibers. When on, linked collections merge into per-component
         # cross-patch pcls with an explicit fiber graph (winding ties propagate
@@ -427,18 +538,35 @@ class Config:
         self.pcl_use_fiber_links = True
         # Include unapproved (pending) links.
         self.pcl_use_pending_fiber_links = False
+        # Vertical/horizontal classification of fiber strips, used for radial
+        # offsets and patch-side linking. VC3D's manual tag wins, then its automatic
+        # tag when the recorded certainty (0..1) reaches the threshold, then a
+        # geometric fallback: a strip whose z extent is at least this fraction
+        # of its path length is vertical.
+        self.pcl_vertical_fiber_min_z_fraction = 0.8
+        self.pcl_vertical_fiber_min_auto_certainty = 0.5
+        # Vertical fibers lie on the back face of the papyrus sheet (the face
+        # away from the umbilicus), a few voxels off the horizontal-fiber
+        # front face the fit targets, along the sheet normal in the
+        # increasing-winding direction of the fitted spiral (the scan-space
+        # winding gradient, not the line to the umbilicus). When enabled,
+        # vertical strips' radius and DT targets sit this many scroll voxels
+        # along that normal outside the winding instead of on it (positive =
+        # increasing winding), so a vertical fiber is satisfied where it
+        # physically is. The
+        # distance is physical: it is converted to spiral radius per point by
+        # the transform's local stretch along the normal (and, after a
+        # constraint bake, by the frozen stack's accumulated stretch), not
+        # applied as a constant in spiral space. Horizontal strips are
+        # untouched.
+        self.pcl_vertical_fiber_radial_offset_enabled = False
+        self.pcl_vertical_fiber_radial_offset_voxels = 4.0
         self.track_min_sample_spacing = 20.0
         self.track_max_sample_spacing = 60.0
         self.track_length_bin_weights = [0.0, 0.15, 0.85]
         self.track_max_tortuosity = None
         self.track_crossing_precompute_max = 8
         self.track_max_track_crossing_per_step = 2
-        self.track_crossing_mode = "count"
-        self.track_min_walk_steps_per_track = 24
-        self.track_max_walk_steps_per_track = 256
-        self.track_min_walks_per_track = 2
-        self.track_max_walks_per_track = 4
-        self.track_walk_minimum_cycle_travel = 20.0
         self.track_exclusion_radius = 16.0
         self.track_radius_target = "mean"
         self.track_radius_loss_margin = 0.025
@@ -452,48 +580,10 @@ class Config:
         self.dense_spacing_mode = "winding_model"
         self.winding_model_relative_pair_delta = [3, 15]
         self.winding_model_huber_delta = 0.5
-        self.dense_spacing_pair_m_short = [
-            3,
-            7
-        ]
-        self.dense_spacing_pair_m_long = [
-            5,
-            15
-        ]
-        self.dense_spacing_pair_long_fraction = 0.15
-        self.dense_spacing_count_temperature_wv = 0.5
-        self.dense_spacing_target_step_wv = 1.0
-        self.dense_spacing_max_step_wv = 2.0
-        self.dense_spacing_max_steps = 1400
-        self.dense_spacing_step_oversample = 1.25
-        self.dense_spacing_use_support_gate = True
-        self.dense_spacing_support_sigma = 4.0
-        self.dense_spacing_support_floor_alpha = 0.05
-        self.dense_spacing_support_policy = "product"
-        self.dense_spacing_phase_huber_delta = 0.5
-        self.dense_spacing_phase_extension_windings = 1.0
-        self.dense_spacing_phase_min_center_gap_wv = 4.0
-        self.dense_spacing_phase_graze_dot = 0.4
-        self.dense_spacing_phase_graze_depth_wv = 1.0
-        self.dense_spacing_phase_window_windings = 0.75
-        self.dense_spacing_phase_end_free_margin_windings = 0.5
-        self.dense_spacing_phase_missing_cost = 0.55
-        self.dense_spacing_phase_missing_extend_cost = 0.55
-        self.dense_spacing_phase_extra_cost = 0.7
-        self.dense_spacing_phase_extra_extend_cost = 0.7
-        self.dense_spacing_phase_temperature = 0.1
-        self.dense_spacing_phase_band_confidence_cost = 0.25
-        self.dense_spacing_phase_top2_margin = 0.1
-        self.dense_spacing_phase_min_matched_windings = 2
-        self.dense_spacing_phase_min_matched_mass = 1.0
         self.loss_weight_min_spacing = 2.0
-        self.loss_weight_dense_spacing_count = 0.0
         self.loss_weight_dense_spacing_density = 12.0
-        self.loss_weight_dense_attachment = 0.0
         self.loss_weight_patch_radius = 8.0
         self.loss_weight_patch_dt = 4.0
-        self.loss_weight_unverified_patch_radius = 2.0
-        self.loss_weight_unverified_patch_dt = 1.0
         self.loss_weight_rel_winding = 5.0
         self.loss_weight_abs_winding = 5.0
         self.loss_weight_unattached_pcl_radius = 2.0
@@ -510,14 +600,7 @@ class Config:
         self.loss_weight_dense_spacing = 12.0
         self.loss_weight_umbilicus = 1.25
         self.loss_weight_shell_outer = 1.0
-        self.loss_weight_shell_patch_radius = 0.0
-        self.loss_weight_anchor = 0.0
-        self.dense_spacing_density_min_gap_wv = 0.0
-        self.dense_spacing_density_max_blind_fraction = 0.75
         self.dense_min_spacing_d_min_wv = 6.0
-        self.dense_attachment_scale = 8.0
-        self.dense_attachment_warmup_steps = 3000
-        self.dense_attachment_ramp_steps = 3000
         self.dense_normals_finite_difference_epsilon = 8.0
         self.fiber_directions_finite_difference_epsilon = 8.0
         self.model_sym_dirichlet_finite_difference_epsilon = 4.0
@@ -525,11 +608,9 @@ class Config:
         self.optimizer_weight_decay_flow_field = 0.0
         self.loss_start_patch_dt = 25000
         self.loss_start_track_dt = 25000
-        self.loss_start_unverified_patch_dt = None
-        self.dt_progressive_windings = False
-        self.dt_progressive_inner_winding = 20
-        self.dt_progressive_steps = 50000
-        self.dt_progressive_exponent = 1.0
+        # First iteration after which the unattached-PCL (fiber strip) DT snap
+        # acts. None follows loss_start_patch_dt, the historical coupling.
+        self.loss_start_unattached_pcl_dt = None
         self.dt_target_mode = "strip_median"
         self.dt_target_floating_threshold = 0.25
         # Backward-compatible alias. FitContext phase-locks whole-object DT
@@ -548,15 +629,6 @@ class Config:
         self.shell_table_smooth_sigma_theta = 1.0
         self.shell_min_confidence = 0.25
         self.output_save_png_visualizations = False
-        self.influence_enabled = False
-        self.influence_z = 3000.0
-        self.influence_windings = 5.0
-        self.influence_theta_frac = 0.5
-        self.influence_disable_dt_frac = 0.75
-        self.influence_sigma = 0.3333
-        self.influence_anchor_ramp_power = 2.0
-        self.dense_spacing_density_lambda = "inverse_gap"
-        self.dense_spacing_density_soft_mass_min_gap_wv = 0.0
         self.output_num_slices_for_visualization = 20
 
         defaults = vars(self)
@@ -635,7 +707,7 @@ class Config:
             }
             for path in (Path(__file__).parent / "configs").glob("*.json")
         }
-        return {
+        return describe_catalog({
             "defaults": defaults,
             "schema": {
                 # No input path can be taken by a resident session: every path
@@ -644,9 +716,15 @@ class Config:
                 "paths": {},
                 # The keys a rebuild can apply without reloading the session's
                 # inputs, advertised so a client can say in advance which kind
-                # of rebuild its pending changes would cause. Authoritative
-                # answers still come from the service (see rebuild_stage).
-                "model_stage_keys": sorted(MODEL_STAGE_KEYS),
+                # of rebuild its pending changes would cause: the model-stage
+                # allowlist plus every run-boundary key, which rebuild_stage()
+                # ignores because a rebuild applies those through
+                # FitContext.apply_config first. Authoritative answers still
+                # come from the service (see rebuild_stage).
+                "model_stage_keys": sorted(
+                    MODEL_STAGE_KEYS | {
+                        key for key, spec in fields.items()
+                        if spec["runtime_impact"] == "run_boundary"}),
                 "fields": fields,
                 # API run-block fields shown in the left-side dock. They are
                 # catalogued for clients but deliberately absent from the
@@ -654,23 +732,7 @@ class Config:
                 "run_fields": run_fields,
             },
             "presets": presets,
-        }
-
-
-def durable_config(values):
-    """The checkpoint-durable subset of a configuration.
-
-    Interactive influence state is session-scoped and the anchor weight only
-    exists while an influence window is active, so neither is stored in (or
-    expected from) a checkpoint's cfg/requested_config/resolved_config.
-    Checkpoint compatibility checks must compare stored key sets against
-    this durable subset of the schema, not the raw schema.
-    """
-    return {
-        key: item for key, item in dict(values).items()
-        if not key.startswith("interactive_influence_")
-        and key != "loss_weight_anchor"
-    }
+        })
 
 
 class FitConfig:
@@ -682,7 +744,7 @@ class FitConfig:
     scaling); FitConfig performs no resolution of its own because the
     resolution policies legitimately differ per entry point (the CLI
     scales-and-splits for DDP, the interactive runtime round-trips
-    checkpoint counts, the golden driver scales without splitting).
+    checkpoint counts, the headless fit driver scales without splitting).
 
     Construction copies the mapping. update() mutates in place, so every
     holder of the same FitConfig (the context, its losses call sites, a

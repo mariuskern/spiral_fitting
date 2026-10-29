@@ -1,38 +1,18 @@
-# Spiral Fitting
+# Surface Prediction
 
 This folder contains the code and configuration required to run the spiral fitting pipeline.
 
-
-## Sources
-
-This folder contains code from the following GitHub repository:
-
-- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/d8c5f488a105286c548c99c5f7c7ad9f29e3ed14) (Commit: d8c5f48)
-
-The original, unmodified code can be found in `original_code/`.
-
-The following subfolders contain code from additional sources:
-
-`spiral_7769da8/`:
-
-This folder combines the spiral-fitting code from **ScrollPrize/villa** with a faster implementation from **7jycwjmbfn-eng/spiral-fit-consumer-gpu**. This version of the spiral fitting is working.
-
-- [**7jycwjmbfn-eng/spiral-fit-consumer-gpu**](https://github.com/7jycwjmbfn-eng/spiral-fit-consumer-gpu/commit/f189740211f462193973055a32e3269c03301587) (Commit: f189740)
-- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/7769da8cf2233310570608feecc127066a7c0c7c/volume-cartographer/scripts/spiral) (Commit: 7769da8)
-- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/blob/9761f14773a3ed41f2459bbf689a8f1998a656ed/volume-cartographer/scripts/spiral/spiral_progress.py) (Commit: 9761f14) (only `villa/spiral_progress.py`)
-
-`spiral_6732d35/`:
-
-This folder attempts to combine a newer version of the spiral-fitting code from **ScrollPrize/villa** with the faster implementation from **7jycwjmbfn-eng/spiral-fit-consumer-gpu**. This version is **not working**.
-
-- [**7jycwjmbfn-eng/spiral-fit-consumer-gpu**](https://github.com/7jycwjmbfn-eng/spiral-fit-consumer-gpu/commit/f189740211f462193973055a32e3269c03301587) (Commit: f189740)
-- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/6732d3587bc3224a8a69a15886fb68c6e57a9342/volume-cartographer/scripts/spiral) (Commit: 6732d35) (doesn't work yet)
-- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/blob/9761f14773a3ed41f2459bbf689a8f1998a656ed/volume-cartographer/scripts/spiral/spiral_progress.py) (Commit: 9761f14) (only `villa/spiral_progress.py`)
-
-> **Note:** The `spiral_7769da8/` and `spiral_6732d35/` folders are deprecated and should no longer be used. A newer working version of the spiral-fitting code is available in the current folder (`./`).
-
-
 ## Getting Started
+
+Run the following commands from the `spiral_fitting/` directory. From the
+repository root, enter it first:
+
+```bash
+cd spiral_fitting
+```
+
+Relative paths in `.env` and command-line arguments are resolved against
+`spiral_fitting/` when starting the pipeline from this directory.
 
 1. Create the python environment:
 
@@ -43,63 +23,8 @@ This folder attempts to combine a newer version of the spiral-fitting code from 
     pip install uv
 
     uv pip install -e .
-    uv pip install torch torchvision
-    uv pip install -e volume-cartographer
     uv pip install python-dotenv
     ```
-
-    If `uv pip install -e volume-cartographer` fails, you can try the following commands on the cluster. This setup worked for me, although I cannot guarantee that the list of commands is complete or that all of them are necessary in every environment.
-
-
-    ```bash
-    module load gcc
-
-    conda install -c conda-forge ceres-solver
-    conda install -c conda-forge metis
-    conda install -c conda-forge opencv
-    conda install -c conda-forge nlohmann_json
-    conda install -c conda-forge curl
-    conda install -c conda-forge libtiff
-    conda install -c conda-forge blosc
-    conda install -c conda-forge lz4
-    export PKG_CONFIG_PATH="$CONDA_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
-
-    mkdir -p ~/boost-build
-    cp -a /apps/openfoam/v2506/ThirdParty-v2506/sources/boost/boost_1_74_0 ~/boost-build/
-    cd ~/boost-build/boost_1_74_0
-    # ./bootstrap.sh
-    # export BOOST_LOCAL="$HOME/boost-build/boost-1.74-local"
-    ./bootstrap.sh --with-libraries=program_options
-    ./b2 -j8 --with-program_options --prefix="$HOME/boost-build/install" install
-
-    cd ~/spiral_fitting/spiral_fitting
-
-    BOOST_ROOT="$HOME/boost-build/install"
-
-    uv pip install -e volume-cartographer \
-        -Ccmake.define.CMAKE_CXX_FLAGS="-I$BOOST_ROOT/include" \
-        -Ccmake.define.CMAKE_EXE_LINKER_FLAGS="-L$BOOST_ROOT/lib -Wl,-rpath,$BOOST_ROOT/lib" \
-        -Ccmake.define.CMAKE_SHARED_LINKER_FLAGS="-L$BOOST_ROOT/lib -Wl,-rpath,$BOOST_ROOT/lib" \
-        -Ccmake.define.METIS_INCLUDE_DIR="$CONDA_PREFIX/include" \
-        -Ccmake.define.METIS_LIBRARY="$CONDA_PREFIX/lib/libmetis.so" \
-        -Ccmake.define.OpenCV_DIR="$CONDA_PREFIX/lib/cmake/opencv4" \
-        -Ccmake.define.CURL_INCLUDE_DIR="$CONDA_PREFIX/include" \
-        -Ccmake.define.CURL_LIBRARY="$CONDA_PREFIX/lib/libcurl.so" \
-        -Ccmake.define.TIFF_INCLUDE_DIR="$CONDA_PREFIX/include" \
-        -Ccmake.define.TIFF_LIBRARY="$CONDA_PREFIX/lib/libtiff.so" \
-        -Ccmake.define.BLOSC_INCLUDE_DIR="$CONDA_PREFIX/include" \
-        -Ccmake.define.BLOSC_LIBRARY="$CONDA_PREFIX/lib/libblosc.so"
-    ```
-
-    <!-- ```bash
-    pip install uv
-    uv sync
-    uv pip install torch torchvision
-    uv pip install -e volume-cartographer
-    uv pip install python-dotenv
-
-    source .venv/bin/activate
-    ``` -->
 
 2. Download the dataset:
 
@@ -146,7 +71,7 @@ This folder attempts to combine a newer version of the spiral-fitting code from 
     Add the `FIT_SPIRAL_CONFIG_OVERRIDES` variable to your `.env` file:
 
     ```bash
-    FIT_SPIRAL_CONFIG_OVERRIDES='{"z_begin": 4000, "z_end": 5000, "optimizer_num_training_steps": 5000, "dense_spacing_mode": "phase"}'
+    FIT_SPIRAL_CONFIG_OVERRIDES='{"z_begin": 4000, "z_end": 5000, "optimizer_num_training_steps": 5000, "dense_spacing_mode": "grad_mag"}'
     ```
 
     The values specified in `FIT_SPIRAL_CONFIG_OVERRIDES` override the corresponding default values from `config.py`.
@@ -406,3 +331,40 @@ The python environment should have already been created as described in `Getting
     ```
 
     Add `--lasagna-device cpu` to run it on a cpu
+
+
+## Sources
+
+This folder contains code from the following GitHub repository:
+
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/8aa507c1215f1fa8758f13d0538f7af9710e02d7) (Commit: 8aa507c)
+
+The original, unmodified code is in `.original_code/`.
+
+The following subfolders contain code from additional sources:
+
+`.out/`
+
+This folder contains code from the following GitHub repository:
+
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/d8c5f488a105286c548c99c5f7c7ad9f29e3ed14) (Commit: d8c5f48)
+
+The original, unmodified code can be found in `original_code/`.
+
+`.out/spiral_7769da8/`:
+
+This folder combines the spiral-fitting code from **ScrollPrize/villa** with a faster implementation from **7jycwjmbfn-eng/spiral-fit-consumer-gpu**. This version of the spiral fitting is working.
+
+- [**7jycwjmbfn-eng/spiral-fit-consumer-gpu**](https://github.com/7jycwjmbfn-eng/spiral-fit-consumer-gpu/commit/f189740211f462193973055a32e3269c03301587) (Commit: f189740)
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/7769da8cf2233310570608feecc127066a7c0c7c/volume-cartographer/scripts/spiral) (Commit: 7769da8)
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/blob/9761f14773a3ed41f2459bbf689a8f1998a656ed/volume-cartographer/scripts/spiral/spiral_progress.py) (Commit: 9761f14) (only `villa/spiral_progress.py`)
+
+`.out/spiral_6732d35/`:
+
+This folder attempts to combine a newer version of the spiral-fitting code from **ScrollPrize/villa** with the faster implementation from **7jycwjmbfn-eng/spiral-fit-consumer-gpu**. This version is **not working**.
+
+- [**7jycwjmbfn-eng/spiral-fit-consumer-gpu**](https://github.com/7jycwjmbfn-eng/spiral-fit-consumer-gpu/commit/f189740211f462193973055a32e3269c03301587) (Commit: f189740)
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/6732d3587bc3224a8a69a15886fb68c6e57a9342/volume-cartographer/scripts/spiral) (Commit: 6732d35) (doesn't work yet)
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/blob/9761f14773a3ed41f2459bbf689a8f1998a656ed/volume-cartographer/scripts/spiral/spiral_progress.py) (Commit: 9761f14) (only `villa/spiral_progress.py`)
+
+> **Note:** The `.out/`, `.out/spiral_7769da8/` and `.out/spiral_6732d35/` folders are deprecated and should no longer be used. A newer working version of the spiral-fitting code is available in the current folder (`./`).
