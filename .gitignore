@@ -1,9 +1,9 @@
-fit_out
+/fit_out
 .env
 .vscode
 out
-data
-checkpoints
+/data
+/checkpoints
 
 
 
