@@ -1,7 +1,6 @@
-/fit_out
 .env
 .vscode
-out
+/out
 /data
 /checkpoints
 
@@ -17,7 +16,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
+# build/
 develop-eggs/
 dist/
 downloads/
