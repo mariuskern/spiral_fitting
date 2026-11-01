@@ -77,7 +77,7 @@ def open_predictions(path):
     vesuvius_src = f'{os.path.dirname(os.path.abspath(__file__))}/../vesuvius/src'
     if vesuvius_src not in sys.path:
         sys.path.insert(0, vesuvius_src)
-    from vesuvius.data.utils import open_zarr
+    from .data.utils import open_zarr
     return open_zarr(path, mode='r')
 
 

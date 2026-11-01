@@ -1,6 +1,15 @@
-# Surface Prediction
+# Spiral Fitting
 
 This folder contains the code and configuration required to run the spiral fitting pipeline.
+
+## Repository layout
+
+| Path | Purpose |
+| --- | --- |
+| [`fit_spiral.py`](fit_spiral.py) | Entry point that loads `.env` and starts the bundled fitter. |
+| [`generate_tracks.py`](generate_tracks.py) | Extract tracks and build their crossing cache. |
+| [`generate_graph_patches.py`](generate_graph_patches.py) | Grow graph patches (tifxyz) from tracks using `grow_track_graph`. |
+| [`squeeze_preciction.py`](squeeze_preciction.py) | Inspect a prediction and copy one channel of a 4D array to a 3D Zarr. |
 
 ## Getting Started
 
@@ -22,7 +31,7 @@ Relative paths in `.env` and command-line arguments are resolved against
 
     pip install uv
 
-    uv pip install -e .
+    uv pip install -e villa_8aa507c
     uv pip install python-dotenv
     ```
 
@@ -66,15 +75,17 @@ Relative paths in `.env` and command-line arguments are resolved against
     }
     ```
 
-    All available configuration options are defined in `config.py`.
+    All available configuration options are defined in
+    [`villa_8aa507c/config.py`](villa_8aa507c/config.py).
 
-    Add the `FIT_SPIRAL_CONFIG_OVERRIDES` variable to your `.env` file:
+    Add the `FIT_SPIRAL_CONFIG_OVERRIDES` variable to `.env` in the repository
+    root (`../.env` from this folder), which `fit_spiral.py` loads automatically:
 
     ```bash
     FIT_SPIRAL_CONFIG_OVERRIDES='{"z_begin": 4000, "z_end": 5000, "optimizer_num_training_steps": 5000, "dense_spacing_mode": "grad_mag"}'
     ```
 
-    The values specified in `FIT_SPIRAL_CONFIG_OVERRIDES` override the corresponding default values from `config.py`.
+    The values specified in `FIT_SPIRAL_CONFIG_OVERRIDES` override the corresponding default values from `villa_8aa507c/config.py`.
 
     The following environment variables can be used to control the pipeline run and override default settings:
 
@@ -94,10 +105,6 @@ Relative paths in `.env` and command-line arguments are resolved against
 
     > **Note:** Avoid using environment variables in paths, as they may not work correctly in all cases.
 
-    <!-- Before running the pipeline, edit the configuration in `config.py`:
-
-    - Around **line 304/305**: set z_start and z_end.
-    - Around **line 311**: set the number of training steps. -->
 
 4. Run the pipeline
 
@@ -107,7 +114,9 @@ Relative paths in `.env` and command-line arguments are resolved against
 
     The scroll spec should be provided as a JSON file. The `--scroll-spec` argument is optional if a `spiral-scroll.json` file is present in the dataset folder.
 
-    The file should contain the following line. The `paths` key is optional.
+    Use the metadata for your scroll, including its actual voxel size in
+    micrometers and outward winding sense. The following is a template;
+    replace the placeholder before saving it as JSON. The `paths` key is optional.
 
     ```json
     {
@@ -116,10 +125,135 @@ Relative paths in `.env` and command-line arguments are resolved against
         "voxel_size_um": 0.08,
         "spiral_outward_sense": "CW",
         "paths": {
-            "tracks_dbm": "<path>" # optional
+            "tracks_dbm": "tracks/tracks.dbm"
         }
     }
     ```
+
+
+## Generating the spiral fit input
+
+The spiral fit can use *tracks* as input. They are skeletonized 2D curves through a binarized surface prediction. This section describes how to generate them from a volume. The steps assume that the python environment from `Getting Started` is active.
+
+All paths below are examples. Replace them with your own.
+
+1. Run the surface prediction as described in the [Surface Prediction README](../surface_prediction/README.md).
+
+2. Check the prediction and convert it to 3D
+
+    The track extraction expects a 3D array in `(Z, Y, X)` order. The finalized prediction may contain an additional channel axis `(C, Z, Y, X)`, which makes the extraction fail with `DimensionError: Only 1D, 2D, and 3D arrays supported. Got: 4`.
+
+    First inspect the prediction. This prints the shape, the data type and the values of the middle slice for each channel:
+
+    ```bash
+    python squeeze_preciction.py <path_to_prediction_run>/final_output.zarr
+    ```
+
+    Check that the values are binary (0/1) and that the fraction of values `> 0` is plausible. Then write a 3D copy:
+
+    ```bash
+    python squeeze_preciction.py <path_to_prediction_run>/final_output.zarr \
+        --out <path_to_prediction_run>/surface_3d.zarr
+    ```
+
+    Useful options:
+
+    | Option | Description |
+    | --- | --- |
+    | `--channel N` | Channel that is copied (default `0`). |
+    | `--threshold V` | Binarizes the output (`> V` becomes 1, otherwise 0). Only needed if the prediction was not thresholded in step 1. |
+
+    If the prediction is already a binary 3D array, use it directly in step 3;
+    the helper does not write a copy of an already 3D array. Its `--threshold`
+    option applies only when copying a channel from a 4D array.
+
+    The helper does not crop the z axis. If the input prediction covers the full
+    volume, `--z-min` / `--z-max` below refer to the original z coordinates.
+    A cropped prediction must first be aligned with the dataset's voxel frame.
+
+3. Extract the tracks
+
+    ```bash
+    python generate_tracks.py \
+        --predictions <path_to_prediction_run>/surface_3d.zarr \
+        --out <path_to_dataset>/tracks/tracks.dbm \
+        --z-min 4000 --z-max 5000
+    ```
+
+    The script runs `extract_surface_tracks` followed by `build_track_crossings` (the latter can be skipped with `--skip-crossings`). Both are started as modules of the `villa_8aa507c` package (`python -m villa_8aa507c.<module>`), because they use relative imports. If the package folder has a different name or location, pass it with `--package-dir`.
+
+    Further options:
+
+    | Option | Description |
+    | --- | --- |
+    | `--backend` | Backend of the track extraction, see `python -m villa_8aa507c.extract_surface_tracks --help`. |
+    | `--gpus` | GPUs used by the track extraction. |
+    | `--skip-crossings` | Skip the crossing cache. The fit then computes the crossings in memory. |
+
+    The following files are created next to `tracks.dbm`:
+
+    ```text
+    tracks/
+    ├── tracks.dbm
+    ├── tracks.dbm.vctracks/        # packed store, loaded fastest by the fit
+    └── tracks.dbm.crossings.npz    # crossing cache (step 3 of the script)
+    ```
+
+    > **Notes:**
+    > - The fast GPU backend is only available on Linux x86-64 with an NVIDIA GPU of compute capability >= 8.0. Otherwise (e.g. on Windows) the much slower CPU skeletonizer is used. Test with a small z range first.
+    > - The extraction resumes: slabs that are already in the database are skipped, so an interrupted run can be restarted with the same arguments.
+    > - The tracks must be in the same voxel frame as the other inputs of the fit (umbilicus, patches, `z_begin` / `z_end`) and should cover at least the z range that is fitted. Tracks outside the fit window are dropped when loading.
+
+4. Use the tracks in the fit
+
+    Tracks are disabled by default. Enable them in the `.env` file:
+
+    ```bash
+    FIT_SPIRAL_CONFIG_OVERRIDES='{"z_begin": 4000, "z_end": 5000, "input_use_tracks": true}'
+    ```
+
+    The fit looks for `tracks/2um_ds2_ps256_surf_v2.dbm` in the dataset. If the database has a different name, or if there are several databases in `tracks/`, set the path in `spiral-scroll.json`:
+
+    ```json
+    {
+        "schema_version": 1,
+        "name": "PHercParis4",
+        "voxel_size_um": 0.08,
+        "spiral_outward_sense": "CW",
+        "paths": {
+            "tracks_dbm": "tracks/tracks.dbm"
+        }
+    }
+    ```
+
+    Then run the fit as described in `Getting Started`.
+
+
+5. Grow graph patches from tracks
+
+    Run this command from `spiral_fitting/` after extracting the tracks and building
+    their crossing cache:
+
+    ```bash
+    python generate_graph_patches.py \
+        --tracks <path_to_dataset>/tracks/tracks.dbm \
+        --out <path_to_dataset>/graph_patches \
+        --random-count <number_of_patches> \
+        --workers <number_of_workers>
+    ```
+
+    Replace all placeholders with your paths and positive integer counts. The helper
+    runs `villa_8aa507c.grow_track_graph` and derives the required
+    `tracks.dbm.vctracks` and `tracks.dbm.crossings.npz` paths from `--tracks`.
+    Generate these sidecars with `generate_tracks.py` without `--skip-crossings`.
+
+    Use `--seeds "<seed_track_rows>"` instead of `--random-count` to select explicit
+    seed tracks. Additional `grow_track_graph` options can be passed after `--`;
+    see `python -m villa_8aa507c.grow_track_graph --help` for their format and defaults.
+
+    To use the resulting patches in the fit, set `paths.verified_patches` to
+    `"graph_patches"` in the dataset's `spiral-scroll.json` and keep
+    `input_use_verified_patches` enabled.
 
 
 ## Installing the VC binaries
@@ -165,7 +299,7 @@ This guide installs the VC binaries in your home directory using an Apptainer co
     ```bash
     #!/bin/bash
 
-    IMAGE="~/volume-cartographer.sif"
+    IMAGE="$HOME/volume-cartographer.sif"
 
     exec apptainer exec "$IMAGE" "$(basename "$0")" "$@"
     ```
@@ -183,25 +317,7 @@ This guide installs the VC binaries in your home directory using an Apptainer co
 
     Create a symlink for each binary you want to use:
 
-    <!-- ```bash
-    cd ~/bin
 
-    ln -s vc vc_render_tifxyz
-    ln -s vc vc_tifxyz_trim
-    ln -s vc vc_tifxyz2obj
-    ln -s vc flatboi
-    ln -s vc vc_obj2tifxyz
-    ln -s vc vc_obj_uv_lift
-    ``` -->
-
-    <!-- ```bash
-    ln -s ~/bin/vc ~/bin/vc_render_tifxyz
-    ln -s ~/bin/vc ~/bin/vc_tifxyz_trim
-    ln -s ~/bin/vc ~/bin/vc_tifxyz2obj
-    ln -s ~/bin/vc ~/bin/flatboi
-    ln -s ~/bin/vc ~/bin/vc_obj2tifxyz
-    ln -s ~/bin/vc ~/bin/vc_obj_uv_lift
-    ``` -->
 
     ```bash
     BIN_DIR=~/bin
@@ -269,13 +385,13 @@ This guide installs the VC binaries in your home directory using an Apptainer co
     For the commands to be available from anywhere, add `~/bin` to your `PATH`:
 
     ```bash
-    export PATH="~/bin:$PATH"
+    export PATH="$HOME/bin:$PATH"
     ```
 
     This change only applies to the current shell session. To make it permanent, add the same line to your `~/.bashrc`:
 
     ```bash
-    echo 'export PATH="~/bin:$PATH"' >> ~/.bashrc
+    echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
     ```
 
     Then reload your shell configuration:
@@ -327,7 +443,7 @@ The python environment should have already been created as described in `Getting
 3. Run `render_ink.py`
 
     ```bash
-    python render_ink.py --volume <path_to_dataset> <path_to_fit_spiral_output>/meshes/fitted/ --lasagna-dir lasagna
+    python villa_8aa507c/render_ink.py --volume <path_to_dataset> <path_to_fit_spiral_output>/meshes/fitted/ --lasagna-dir lasagna
     ```
 
     Add `--lasagna-device cpu` to run it on a cpu
