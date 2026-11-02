@@ -8,6 +8,7 @@ This folder contains the code and configuration required to run the spiral fitti
 | --- | --- |
 | [`fit_spiral.py`](fit_spiral.py) | Entry point that loads `.env` and starts the bundled fitter. |
 | [`generate_tracks.py`](generate_tracks.py) | Extract tracks and build their crossing cache. |
+| [`generate_fiber_directions.py`](generate_fiber_directions.py) | Export fiber direction samples from an existing prediction. |
 | [`generate_graph_patches.py`](generate_graph_patches.py) | Grow graph patches (tifxyz) from tracks using `grow_track_graph`. |
 | [`squeeze_preciction.py`](squeeze_preciction.py) | Inspect a prediction and copy one channel of a 4D array to a 3D Zarr. |
 
@@ -254,6 +255,32 @@ All paths below are examples. Replace them with your own.
     To use the resulting patches in the fit, set `paths.verified_patches` to
     `"graph_patches"` in the dataset's `spiral-scroll.json` and keep
     `input_use_verified_patches` enabled.
+
+
+6. Generate fiber direction samples
+
+    Requires an existing fiber prediction: download one from
+    `<scroll>/representations/predictions/fibers/` in the open-data bucket or
+    create one using the [Lasagna guide](../lasagna/README.md).
+    Its `.lasagna.json` manifest must be served over HTTP(S).
+
+    From `spiral_fitting/`, in the fitting environment:
+
+    ```bash
+    python generate_fiber_directions.py http://localhost:8000/fiber.lasagna.json ../data/fiber_directions.npz --z-roi 0,800 --output-scale 1 --presence-threshold 160 --cell-size 2
+    ```
+
+    `--z-roi` is half-open in fit coordinates; `--output-scale` is scan `/0`
+    voxels per fit voxel: fit level `/0` = `1`, `/1` = `2`, `/2` = `4`.
+    This refers to the fit resolution, not the fiber inference output. Match the fit's coordinate
+    origin and scale. Threshold `160` filters Presence values on the 0-255 scale;
+    `--cell-size 2` keeps one sample per 2-voxel cell in prediction space.
+    Use `--overwrite` to replace an existing export.
+
+    Set `paths.fiber_directions` in the dataset's `spiral-scroll.json` to the
+    exported file (relative to the dataset), then enable
+    `input_use_fiber_directions=true` and `loss_weight_fiber_directions>0`.
+    The loss constrains sheet orientation, not winding assignment.
 
 
 ## Installing the VC binaries
