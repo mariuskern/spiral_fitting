@@ -1,7 +1,12 @@
 import argparse
+import itertools
 import json
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import numpy as np
 import zarr
@@ -10,10 +15,10 @@ import zarr
 def parse_region(values):
     """
     Convert:
-        x_start x_stop y_start y_stop z_start z_stop
+        a_start a_stop b_start b_stop c_start c_stop
 
     into:
-        [(x_start, x_stop), (y_start, y_stop), (z_start, z_stop)]
+        [(a_start, a_stop), (b_start, b_stop), (c_start, c_stop)]
     """
 
     if len(values) % 2 != 0:
@@ -37,40 +42,61 @@ def validate_region(region, shape):
             raise ValueError(f"Dimension {dim}: {start}:{stop} exceeds dimension size {size}.")
 
 
-def iterate_slices(shape, chunks):
+def iterate_slices(shape, block_shape):
     """
-    Iterate over the output array chunk by chunk.
+    Iterate over the output array block by block.
 
-    Returns slices such as:
-
-        (slice(0, 64), slice(0, 64), slice(0, 64))
+    block_shape must be a multiple of the local chunk shape, so that every
+    block covers whole chunks. Then no two threads ever write to the same
+    chunk (important: concurrent writes to one chunk would be a race).
     """
 
-    import itertools
+    block_counts = [(size + b - 1) // b for size, b in zip(shape, block_shape)]
 
-    chunk_counts = [(size + chunk - 1) // chunk for size, chunk in zip(shape, chunks)]
-
-    for chunk_index in itertools.product(*[range(n) for n in chunk_counts]):
+    for block_index in itertools.product(*[range(n) for n in block_counts]):
         slices = []
 
-        for dim, index in enumerate(chunk_index):
-            start = index * chunks[dim]
-            stop = min(start + chunks[dim], shape[dim])
+        for dim, index in enumerate(block_index):
+            start = index * block_shape[dim]
+            stop = min(start + block_shape[dim], shape[dim])
 
             slices.append(slice(start, stop))
 
         yield tuple(slices)
 
 
-def slice_to_list(slices):
-    """Convert tuple of slices into JSON serializable data."""
+def block_key(block):
+    """Stable string identifying a block, e.g. '0:64,0:64,64:100'."""
 
-    return [[s.start, s.stop] for s in slices]
+    return ",".join(f"{s.start}:{s.stop}" for s in block)
+
+
+def copy_block(source, destination, region, local_slices, retries):
+    """Read one block from the remote array and write it to the local array."""
+
+    source_slices = tuple(
+        slice(region[dim][0] + s.start, region[dim][0] + s.stop)
+        for dim, s in enumerate(local_slices)
+    )
+
+    for attempt in range(1, retries + 1):
+        try:
+            data = source[source_slices]
+            break
+        except Exception:
+            if attempt == retries:
+                raise
+            # Exponential backoff: 1s, 2s, 4s, ...
+            time.sleep(2 ** (attempt - 1))
+
+    destination[local_slices] = data
+
+    return int(np.prod(data.shape))
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Download a region of a remote Zarr and store it as a new local Zarr starting at index 0."
+        description="Download a remote Zarr array or a region and store it as a new local Zarr starting at index 0."
     )
 
     parser.add_argument(
@@ -81,16 +107,17 @@ def main():
     parser.add_argument(
         "output",
         type=Path,
-        help="Output Zarr directory.",
+        help="Output directory; the local Zarr keeps the remote directory name.",
     )
 
     parser.add_argument(
         "--region",
         nargs="+",
         type=int,
-        required=True,
         metavar="N",
-        help="Region as start/stop pairs. For a 3D array: z_start z_stop y_start y_stop x_start x_stop",
+        help="Region as start/stop pairs, one pair per dimension, in array axis order. "
+             "If omitted, download the entire selected array. "
+             "E.g. for a 3D array: axis0_start axis0_stop axis1_start axis1_stop axis2_start axis2_stop",
     )
 
     parser.add_argument(
@@ -100,27 +127,52 @@ def main():
         help="Path of the array inside the Zarr, e.g. volume or group/volume.",
     )
 
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=32,
+        help="Number of parallel download threads (default: 32).",
+    )
+
+    parser.add_argument(
+        "--block-factor",
+        type=int,
+        default=1,
+        help="Each task copies block-factor chunks per dimension (default: 1 = one chunk per task). "
+             "Larger values (e.g. 2 or 4) reduce task overhead but use more memory per task.",
+    )
+
+    parser.add_argument(
+        "--retries",
+        type=int,
+        default=5,
+        help="Number of attempts per block on errors (default: 5).",
+    )
+
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Continue an interrupted download. Region, --array and --block-factor "
+             "must be identical to the interrupted run.",
+    )
+
     args = parser.parse_args()
 
     # ------------------------------------------------------------
     # Parse region
     # ------------------------------------------------------------
 
-    region = parse_region(args.region)
+    region = parse_region(args.region) if args.region is not None else None
 
-    print("Remote Zarr:")
-    print(args.url)
-
-    print()
-    print("Array:")
-    print(args.array)
+    print(f"Remote Zarr: {args.url}")
+    print(f"Array:       {args.array}")
 
     # ------------------------------------------------------------
     # Open remote Zarr
     # ------------------------------------------------------------
 
     print()
-    print("Opening remote Zarr...")
+    print("Opening remote Zarr...", flush=True)
 
     root = zarr.open(
         args.url.rstrip("/") + "/",
@@ -130,16 +182,16 @@ def main():
     source = root[args.array]
 
     print()
-    print("Source array:")
-    print(f"  shape : {source.shape}")
-    print(f"  chunks: {source.chunks}")
-    print(f"  dtype : {source.dtype}")
+    print(f"Source: shape={source.shape}, chunks={source.chunks}, dtype={source.dtype}")
 
     # ------------------------------------------------------------
     # Validate region
     # ------------------------------------------------------------
 
-    validate_region(region, source.shape,)
+    if region is None:
+        region = [(0, size) for size in source.shape]
+
+    validate_region(region, source.shape)
 
     # ------------------------------------------------------------
     # Calculate local shape
@@ -148,19 +200,13 @@ def main():
     local_shape = tuple(stop - start for start, stop in region)
 
     # Use the source chunk size where possible.
-    #
-    # If the requested region is smaller than one source chunk,
-    # the final chunk will naturally be smaller.
     local_chunks = tuple(min(chunk, size) for chunk, size in zip(source.chunks, local_shape))
 
-    print()
-    print("Requested region:")
-    print(f"  {region}")
+    # Block shape = multiple of the local chunk shape (see iterate_slices).
+    block_shape = tuple(c * args.block_factor for c in local_chunks)
 
-    print()
-    print("Local array:")
-    print(f"  shape : {local_shape}")
-    print(f"  chunks: {local_chunks}")
+    print("Region: " + ", ".join(f"{start}:{stop}" for start, stop in region))
+    print(f"Local:  shape={local_shape}, chunks={local_chunks}")
 
     # ------------------------------------------------------------
     # Create output directory
@@ -172,80 +218,145 @@ def main():
     # Create local Zarr
     # ------------------------------------------------------------
 
-    output_zarr = args.output / "data.zarr"
+    zarr_name = Path(urlsplit(args.url).path.rstrip("/")).name
+    if not zarr_name or zarr_name == "..":
+        raise ValueError("Remote Zarr URL must include a directory name.")
+    output_zarr = args.output / zarr_name
 
     print()
-    print(f"Creating: {output_zarr}")
+    print(f"Output: {output_zarr}")
+
+    progress_path = args.output / "progress.txt"
 
     if output_zarr.exists():
-        raise FileExistsError(
-            f"Output already exists: {output_zarr}\n"
-            "Delete it first or choose another output directory."
+        if not args.resume:
+            raise FileExistsError(
+                f"Output already exists: {output_zarr}\n"
+                "Use --resume to continue, or delete it first."
+            )
+
+        print("Resuming existing download...")
+
+        z = zarr.open(
+            output_zarr,
+            mode="r+"
         )
 
-    # destination = zarr.open(
-    #     output_zarr,
-    #     mode="w",
-    #     shape=local_shape,
-    #     chunks=local_chunks,
-    #     dtype=source.dtype,
-    # )
+        destination = z[args.array]
 
-    z = zarr.open(
-        output_zarr,
-        mode="w"
-    )
+        if destination.shape != local_shape or destination.chunks != local_chunks:
+            raise ValueError(
+                "Existing local array does not match the requested region.\n"
+                f"  existing: shape={destination.shape}, chunks={destination.chunks}\n"
+                f"  requested: shape={local_shape}, chunks={local_chunks}"
+            )
 
-    z.create_array(
-        args.array,
-        shape=local_shape,
-        chunks=local_chunks,
-        dtype=source.dtype,
-    )
+    else:
+        if args.resume:
+            print("Nothing to resume, starting a new download.")
 
-    destination = z[args.array]
+        # A leftover progress file from an earlier run must not be reused.
+        if progress_path.exists():
+            progress_path.unlink()
+
+        z = zarr.open(
+            output_zarr,
+            mode="w"
+        )
+
+        z.create_array(
+            args.array,
+            shape=local_shape,
+            chunks=local_chunks,
+            dtype=source.dtype,
+        )
+
+        destination = z[args.array]
+
+        # --------------------------------------------------------
+        # Copy attributes (only for a new array)
+        # --------------------------------------------------------
+
+        try:
+            for key, value in source.attrs.items():
+                destination.attrs[key] = value
+        except Exception:
+            print("Warning: Could not copy all source attributes.")
 
     # ------------------------------------------------------------
-    # Copy attributes
-    # ------------------------------------------------------------
-
-    try:
-        for key, value in source.attrs.items():
-            destination.attrs[key] = value
-    except Exception:
-        print("Warning: Could not copy all source attributes.")
-
-    # ------------------------------------------------------------
-    # Download data chunk by chunk
+    # Download data in parallel
     # ------------------------------------------------------------
 
     total_elements = int(np.prod(local_shape))
+    failed_blocks = []
 
-    processed_elements = 0
+    all_blocks = list(iterate_slices(local_shape, block_shape))
 
-    print()
-    print("Downloading region...")
+    # Blocks that were completed in an earlier run (only filled with --resume).
+    done = set()
 
-    for local_slices in iterate_slices(local_shape, local_chunks):
-        # Translate local coordinates to source coordinates.
-        source_slices = tuple(slice(region[dim][0] + local_slices[dim].start, region[dim][0] + local_slices[dim].stop) for dim in range(len(region)))
+    if args.resume and progress_path.exists():
+        done = set(progress_path.read_text().split())
 
-        # Read only this part from the remote Zarr.
-        data = source[source_slices]
+    blocks = [b for b in all_blocks if block_key(b) not in done]
 
-        # Write it to the corresponding local position.
-        destination[local_slices] = data
-
-        chunk_elements = int(np.prod(data.shape))
-
-        processed_elements += chunk_elements
-
-        percentage = 100.0 * processed_elements / total_elements
-
-        print(f"\rProgress: {percentage:6.2f}%", end="", flush=True)
+    # The progress display starts at the already completed part.
+    processed_elements = sum(
+        int(np.prod([s.stop - s.start for s in b]))
+        for b in all_blocks
+        if block_key(b) in done
+    )
 
     print()
-    print("Download complete.")
+    print(
+        f"Downloading region: {len(blocks)} of {len(all_blocks)} tasks remaining, "
+        f"{args.workers} workers...", flush=True
+    )
+
+    interactive = sys.stdout.isatty()
+    progress_step = 1 if interactive else 5
+    last_percentage = -progress_step
+
+    with progress_path.open("a") as progress_file, \
+            ThreadPoolExecutor(max_workers=args.workers) as executor:
+
+        futures = {
+            executor.submit(copy_block, source, destination, region, block, args.retries): block
+            for block in blocks
+        }
+
+        for completed, future in enumerate(as_completed(futures), start=1):
+            block = futures[future]
+
+            try:
+                processed_elements += future.result()
+
+                # Only written after the block is completely on disk.
+                progress_file.write(block_key(block) + "\n")
+                progress_file.flush()
+            except Exception as e:
+                failed_blocks.append(block)
+                print(f"\n[ERROR] Block {block_key(block)}: {e}", flush=True)
+
+            percentage = 100.0 * processed_elements / total_elements
+            if percentage >= last_percentage + progress_step or completed == len(blocks):
+                print(
+                    "\r" if interactive else "",
+                    f"Progress: {percentage:6.2f}%"
+                    f" | tasks: {len(all_blocks) - len(blocks) + completed}/{len(all_blocks)}"
+                    f" | failed: {len(failed_blocks)}",
+                    sep="", end="" if interactive else "\n", flush=True,
+                )
+                last_percentage = percentage
+
+    if interactive and blocks:
+        print()
+
+    if failed_blocks:
+        raise RuntimeError(
+            f"{len(failed_blocks)} block(s) failed after {args.retries} attempts. "
+            "The local Zarr is incomplete. Run the same command again with --resume."
+        )
 
     # ------------------------------------------------------------
     # Metadata
@@ -258,9 +369,7 @@ def main():
         },
 
         "download": {
-            "created_at": datetime.now(
-                timezone.utc
-            ).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         },
 
         "source_array": {
@@ -272,10 +381,7 @@ def main():
 
         "region": {
             "source": [
-                {
-                    "start": start,
-                    "stop": stop,
-                }
+                {"start": start, "stop": stop}
                 for start, stop in region
             ],
         },
@@ -290,15 +396,8 @@ def main():
         },
 
         "coordinate_mapping": {
-            "source_origin": [
-                start
-                for start, _ in region
-            ],
-
-            "description": (
-                "local_index + source_origin = "
-                "source_index"
-            ),
+            "source_origin": [start for start, _ in region],
+            "description": "local_index + source_origin = source_index",
         },
     }
 
@@ -311,380 +410,16 @@ def main():
     with metadata_path.open("w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
 
-    print()
-    print("Created:")
-    print(f"  Zarr: {output_zarr}")
-    print(f"  Meta: {metadata_path}")
+    # The download is complete, the progress file is no longer needed.
+    # (Deleted last, so a failure above can still be resumed.)
+    if progress_path.exists():
+        progress_path.unlink()
 
     print()
-    print("Done.")
+    print("Download complete.")
+    print(f"  Zarr: {output_zarr}")
+    print(f"  Meta: {metadata_path}")
 
 
 if __name__ == "__main__":
     main()
-
-
-
-
-# # import zarr
-
-
-# # url = "https://dl.ash2txt.org/full-scrolls/Scroll3/PHerc332.volpkg/volumes_zarr_standardized/53keV_7.91um_Scroll3.zarr/"
-
-# # z = zarr.open(url, mode="r")
-
-# # for group in z:
-# #     print(group)
-# #     print(z[group].shape)
-# #     print(z[group].chunks)
-# #     print()
-
-
-# # import zarr
-
-# # url = "https://dl.ash2txt.org/full-scrolls/Scroll3/PHerc332.volpkg/volumes_zarr_standardized/53keV_7.91um_Scroll3.zarr/"
-
-# # root = zarr.open(url, mode="r")
-
-# # print(root.tree())
-
-
-# import argparse
-# import concurrent.futures
-# from pathlib import Path
-
-# import requests
-# import zarr
-
-
-# def download_file(url: str, output_path: Path, timeout: int = 60):
-#     """Download one file."""
-#     output_path.parent.mkdir(parents=True, exist_ok=True)
-
-#     if output_path.exists():
-#         return output_path, False
-
-#     response = requests.get(url, timeout=timeout)
-#     response.raise_for_status()
-
-#     output_path.write_bytes(response.content)
-
-#     return output_path, True
-
-
-# def get_chunk_indices(chunks, region):
-#     """
-#     Calculate all chunk indices required for a given array region.
-
-#     region:
-#         [(start, stop), (start, stop), ...]
-#     """
-
-#     import itertools
-
-#     chunk_ranges = []
-
-#     for (start, stop), chunk_size in zip(region, chunks):
-#         first_chunk = start // chunk_size
-#         last_chunk = (stop - 1) // chunk_size
-
-#         chunk_ranges.append(
-#             range(first_chunk, last_chunk + 1)
-#         )
-
-#     return itertools.product(*chunk_ranges)
-
-
-# def find_arrays(group, prefix=""):
-#     """
-#     Recursively find all arrays in a Zarr hierarchy.
-
-#     Returns:
-#         (path, array)
-#     """
-
-#     for name in group:
-#         value = group[name]
-
-#         path = f"{prefix}/{name}" if prefix else name
-
-#         if isinstance(value, zarr.Array):
-#             yield path, value
-
-#         elif isinstance(value, zarr.Group):
-#             yield from find_arrays(value, path)
-
-
-# def main():
-#     parser = argparse.ArgumentParser(
-#         description=(
-#             "Download selected chunks of a remote Zarr array "
-#             "in parallel."
-#         )
-#     )
-
-#     parser.add_argument(
-#         "url",
-#         help="URL of the Zarr root.",
-#     )
-
-#     parser.add_argument(
-#         "output",
-#         type=Path,
-#         help="Local output directory.",
-#     )
-
-#     parser.add_argument(
-#         "--array",
-#         type=str,
-#         required=True,
-#         help=(
-#             "Path of the Zarr array inside the hierarchy, "
-#             "e.g. volume or data/volume."
-#         ),
-#     )
-
-#     parser.add_argument(
-#         "--region",
-#         nargs="+",
-#         type=int,
-#         required=True,
-#         metavar="N",
-#         help=(
-#             "Region as start/stop pairs. "
-#             "For a 3D array: "
-#             "x_start x_stop y_start y_stop z_start z_stop"
-#         ),
-#     )
-
-#     parser.add_argument(
-#         "--workers",
-#         type=int,
-#         default=8,
-#         help="Number of parallel downloads (default: 8).",
-#     )
-
-#     args = parser.parse_args()
-
-#     if len(args.region) % 2 != 0:
-#         raise ValueError(
-#             "--region must contain start/stop pairs."
-#         )
-
-#     # ------------------------------------------------------------
-#     # Normalize URL
-#     # ------------------------------------------------------------
-
-#     base_url = args.url.rstrip("/") + "/"
-
-#     # ------------------------------------------------------------
-#     # Open remote Zarr
-#     # ------------------------------------------------------------
-
-#     print("Reading Zarr metadata...")
-
-#     root = zarr.open(base_url, mode="r")
-
-#     # ------------------------------------------------------------
-#     # Print available arrays
-#     # ------------------------------------------------------------
-
-#     print()
-#     print("Available arrays:")
-
-#     arrays = dict(find_arrays(root))
-
-#     for path, array in arrays.items():
-#         print(
-#             f"  {path}"
-#             f"  shape={array.shape}"
-#             f"  chunks={array.chunks}"
-#             f"  dtype={array.dtype}"
-#         )
-
-#     print()
-
-#     # ------------------------------------------------------------
-#     # Select array
-#     # ------------------------------------------------------------
-
-#     if args.array not in arrays:
-#         raise ValueError(
-#             f"Array '{args.array}' not found.\n"
-#             f"Available arrays:\n"
-#             + "\n".join(f"  {path}" for path in arrays)
-#         )
-
-#     z = arrays[args.array]
-#     array_url = base_url + args.array.rstrip("/") + "/"
-
-#     print(f"Selected array: {args.array}")
-#     print(f"Shape         : {z.shape}")
-#     print(f"Chunks        : {z.chunks}")
-#     print(f"Dtype         : {z.dtype}")
-
-#     # ------------------------------------------------------------
-#     # Build region
-#     # ------------------------------------------------------------
-
-#     ndim = len(z.shape)
-
-#     if len(args.region) != ndim * 2:
-#         raise ValueError(
-#             f"Expected {ndim * 2} region values "
-#             f"for a {ndim}D array, "
-#             f"got {len(args.region)}."
-#         )
-
-#     region = [
-#         (args.region[i], args.region[i + 1])
-#         for i in range(0, len(args.region), 2)
-#     ]
-
-#     # ------------------------------------------------------------
-#     # Validate region
-#     # ------------------------------------------------------------
-
-#     for dim, ((start, stop), size) in enumerate(
-#         zip(region, z.shape)
-#     ):
-#         if start < 0 or stop > size or start >= stop:
-#             raise ValueError(
-#                 f"Invalid region for dimension {dim}: "
-#                 f"{start}:{stop}, size={size}"
-#             )
-
-#     # ------------------------------------------------------------
-#     # Determine required chunks
-#     # ------------------------------------------------------------
-
-#     chunks = list(
-#         get_chunk_indices(
-#             z.chunks,
-#             region,
-#         )
-#     )
-
-#     print()
-#     print(f"Requested region: {region}")
-#     print(f"Required chunks : {len(chunks)}")
-#     print(f"Workers         : {args.workers}")
-#     print()
-
-#     # ------------------------------------------------------------
-#     # IMPORTANT:
-#     #
-#     # We use the Zarr store to obtain the actual storage keys.
-#     #
-#     # This avoids assuming a layout such as:
-#     #
-#     #   0.0.0
-#     #   0.0.1
-#     #
-#     # which is not necessarily correct for the Zarr.
-#     # ------------------------------------------------------------
-
-#     store = z.store
-
-#     # ------------------------------------------------------------
-#     # Download
-#     # ------------------------------------------------------------
-
-#     downloaded = 0
-#     skipped = 0
-#     failed = 0
-
-#     def worker(chunk_index):
-#         """
-#         Download one Zarr chunk.
-
-#         The actual storage key is obtained from Zarr's store
-#         instead of constructing a Zarr-v2-style filename.
-#         """
-
-#         try:
-#             # Ask Zarr for the actual chunk key.
-#             chunk_key = z.metadata.encode_chunk_key(chunk_index)
-
-#             # Convert the store key to a string.
-#             chunk_key = str(chunk_key)
-
-#             # The local path mirrors the Zarr store structure.
-#             output_path = (
-#                 args.output
-#                 / args.array
-#                 / chunk_key
-#             )
-
-#             # Construct remote URL.
-#             url = array_url + chunk_key.lstrip("/")
-
-#             path, was_downloaded = download_file(
-#                 url,
-#                 output_path,
-#             )
-
-#             return (
-#                 chunk_index,
-#                 path,
-#                 was_downloaded,
-#                 None,
-#             )
-
-#         except Exception as e:
-#             return (
-#                 chunk_index,
-#                 None,
-#                 False,
-#                 e,
-#             )
-
-#     with concurrent.futures.ThreadPoolExecutor(
-#         max_workers=args.workers
-#     ) as executor:
-
-#         futures = [
-#             executor.submit(worker, chunk)
-#             for chunk in chunks
-#         ]
-
-#         for future in concurrent.futures.as_completed(
-#             futures
-#         ):
-#             (
-#                 chunk_index,
-#                 path,
-#                 was_downloaded,
-#                 error,
-#             ) = future.result()
-
-#             if error is not None:
-#                 failed += 1
-
-#                 print(
-#                     f"[ERROR] {chunk_index}: {error}"
-#                 )
-
-#             elif was_downloaded:
-#                 downloaded += 1
-
-#                 print(
-#                     f"[DOWNLOADED] {chunk_index}"
-#                 )
-
-#             else:
-#                 skipped += 1
-
-#                 print(
-#                     f"[SKIP] {chunk_index}"
-#                 )
-
-#     print()
-#     print("Finished.")
-#     print(f"Downloaded: {downloaded}")
-#     print(f"Skipped   : {skipped}")
-#     print(f"Failed    : {failed}")
-
-
-# if __name__ == "__main__":
-#     main()

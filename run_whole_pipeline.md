@@ -40,7 +40,7 @@ The command prints the path of the newly created directory.
 Archive the downloaded scroll by using the following command:
 
 ```bash
-tar -cf 332/data.tar 332/data.zarr
+tar -cf 53keV_7.91um_Scroll3/53keV_7.91um_Scroll3.tar 53keV_7.91um_Scroll3/53keV_7.91um_Scroll3.zarr
 ```
 
 
@@ -49,7 +49,7 @@ tar -cf 332/data.tar 332/data.zarr
 Extract the scroll tar
 
 ```bash
-tar -xvf 332.tar
+tar -xvf 53keV_7.91um_Scroll3.tar
 ```
 
 Convert the zarr volume to a 3d tif image stack

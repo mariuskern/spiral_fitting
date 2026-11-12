@@ -12,15 +12,24 @@ The `fetch_roi.py` and `fetch_tree.py` are from the following GitHub repository:
 
 ### `download_zarr_from_url.py`
 
-Downloads a 3D region from a remote Zarr volume using a URL. The region can be specified by its Z, Y, and X coordinate ranges, allowing you to download only the required part of a volume.
+Downloads a remote Zarr array in parallel. Optionally select a region with one start/stop pair per dimension in array axis order (e.g. Z, Y, X); stop indices are exclusive.
 
 **Usage:**
 
 ```bash
 python download_zarr_from_url.py <url_to_zarr> <output_path> \
-    --region <z_start> <z_stop> <y_start> <y_stop> <x_start> <x_stop> \
-    --array <array>
+    [--region <z_start> <z_stop> <y_start> <y_stop> <x_start> <x_stop>] \
+    [--array <array>] [--workers 32] [--block-factor 1] [--retries 5] [--resume]
 ```
+
+- `--region`: Optional region; omit to download the entire selected array.
+- `--array`: Array path inside the Zarr group (default: `0`).
+- `--workers`: Parallel download threads (default: `32`).
+- `--block-factor`: Chunks per dimension per task; larger values use more memory (default: `1`).
+- `--retries`: Maximum read attempts per block (default: `5`).
+- `--resume`: Continue an interrupted download, skipping completed blocks. Repeat the same command with this flag; keep URL, output path, region, `--array` and `--block-factor` unchanged. Starts a new download if none exists.
+
+Creates `<output_path>/<remote_name>.zarr` using the remote Zarr's directory name, plus `meta.json` with source and coordinate metadata. Local indices start at zero; add the source region's start coordinates to recover source indices. An existing output Zarr requires `--resume`. Completed blocks are tracked in `progress.txt`, which is removed after a successful download.
 
 **Example: Download a region of Scroll 332**
 
