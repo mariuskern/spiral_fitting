@@ -136,6 +136,9 @@ Relative paths in `.env` and command-line arguments are resolved against
 
 The spiral fit can use *tracks* as input. They are skeletonized 2D curves through a binarized surface prediction. This section describes how to generate them from a volume. The steps assume that the python environment from `Getting Started` is active.
 
+For a separate TIFF-based workflow, see the [Surface Detection guide](../surface_detection/README.md).
+To explore another way of finding surface patches, see the [scrollreading guide](../scrollreading/README.md).
+
 All paths below are examples. Replace them with your own.
 
 1. Run the surface prediction as described in the [Surface Prediction README](../surface_prediction/README.md).
@@ -281,6 +284,45 @@ All paths below are examples. Replace them with your own.
     exported file (relative to the dataset), then enable
     `input_use_fiber_directions=true` and `loss_weight_fiber_directions>0`.
     The loss constrains sheet orientation, not winding assignment.
+
+
+## Installing VC3D
+
+For the VC3D desktop app, see the [official installation and unwrapping guide](https://scrollprize.org/tutorial_VC3D).
+The [archived segmentation tutorial](https://scrollprize.org/segmentation) covers an earlier version of the workflow.
+
+### Running VC3D with Docker in WSL
+
+On Windows, VC3D can also run in Docker inside WSL. This setup requires a working
+X11 display in WSL and compatible NVIDIA GPU support for `--gpus all`.
+
+Pull the Docker image and allow local Docker containers to access the X11 display.
+
+```bash
+docker pull ghcr.io/scrollprize/villa/volume-cartographer:edge
+xhost +local:docker
+```
+
+Start the container.
+
+```bash
+docker run \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  -it \
+  -e DISPLAY=$DISPLAY \
+  --gpus all \
+  -e QT_QPA_PLATFORM=xcb \
+  -e QT_X11_NO_MITSHM=1 \
+  --rm \
+  ghcr.io/scrollprize/villa/volume-cartographer:edge
+```
+
+Launch the application from inside the container.
+
+```bash
+cd /usr/local/bin
+VC3D
+```
 
 
 ## Installing the VC binaries

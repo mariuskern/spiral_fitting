@@ -1,89 +1,77 @@
-# Spiral Fitting
+# Virtual Unwrapping of Herculaneum Scrolls
 
-This repository contains code for unwrapping Herculaneum scrolls. It includes tools for **surface detection**, **evidence extraction**, and **spiral fitting**.
+This project sets up a virtual unwrapping pipeline for the carbonized papyrus
+scrolls from Herculaneum. It uses 3D CT scans to reconstruct the geometry of the
+rolled sheet and map it onto a flat surface where traces of writing can be
+examined.
 
-
-## Repository Structure
-
-The repository is organized into the following subfolders:
-
-- `download_data`: Utilities for downloading and preparing data.
-- `scrollreading`: Tools for finding surface patches using surface detection and volume data stored as Zarr.
-- `spiral_fitting`: Code for running the spiral fitting.
-- `surface_detection`: Tools for detecting papyrus surfaces in TIFF image stacks.
-
+The core method is **spiral fitting**. The fitter deforms a reference spiral
+to match observations of the papyrus across the scan. A single model describes
+the windings in the fitted region, including gaps between observed surface
+fragments. Most of the code in this repository, including the spiral fitter,
+comes from the Vesuvius Challenge's `ScrollPrize/villa` repository. This project
+connects the fitter to tools that generate fitting inputs from CT scans.
 
 ## Pipeline
 
-This repository is a work in progress. The current idea is to use **surface detection** as the first step to preprocess the data into a more suitable format.
+```mermaid
+flowchart TD
+    CT["CT volume (Zarr)"] --> SURFACE["Surface tracks and patches"]
+    CT --> FIBERS["Fiber direction samples"]
+    SURFACE --> FIT["Spiral fitting"]
+    FIBERS --> FIT
+    ANNOTATIONS["Scroll axis and available annotations"] --> FIT
+    FIT --> MESHES["Per-winding 3D meshes"]
+    MESHES --> FLAT["Flattened views"]
+```
 
-The next step is to collect different kinds of evidence about the scroll, for example:
+1. **Prepare the scan.** [Download a CT volume or crop](download_data/README.md)
+   in Zarr format.
+2. **Generate fitting inputs.** Use [surface predictions](surface_prediction/README.md)
+   to [extract tracks and grow surface patches](spiral_fitting/README.md#generating-the-spiral-fit-input).
+   [Fiber predictions](lasagna/README.md) provide additional evidence about
+   the local orientation of the papyrus.
+3. **Fit the spiral.** The [fitter](spiral_fitting/README.md#getting-started)
+   uses the scroll's central axis as a reference and combines the generated
+   inputs with available winding annotations. It produces a 3D mesh for each
+   winding in the fitted region.
+4. **Flatten and render.** [Flatten the fitted surface](spiral_fitting/villa_8aa507c/README.md#flattening-a-fitted-checkpoint)
+   and [render views for ink inspection](spiral_fitting/README.md#getting-started-with-render_inkpy).
 
-- Surface patches
-- Strips and lines of points
-- Relative winding annotations
-- Absolute winding annotations
-- Other geometric or structural information
+## Project structure
 
-Some of this evidence could potentially be generated using tools such as `scrollreading`.
+| Directory | Role and entry point |
+| --- | --- |
+| [`download_data/`](download_data/README.md) | Downloads CT volumes and published fitting datasets. Start with `download_zarr_from_url.py` for a CT volume or crop. The directory also contains Zarr/TIFF conversion utilities. |
+| [`surface_prediction/`](surface_prediction/README.md) | Runs nnU-Net inference on Zarr volumes. `main.py` runs tiled inference, blends overlapping predictions, and writes surface probabilities or a binary mask to `final_output.zarr`. |
+| [`lasagna/`](lasagna/README.md) | Predicts fiber presence and direction. `main.py` runs inference and `viewer.py` lets you inspect the predictions. |
+| [`spiral_fitting/`](spiral_fitting/README.md) | Contains the input generation scripts and the `fit_spiral.py` entry point for the bundled fitter. Its guide also covers VC3D setup and ink rendering. |
+| [`scrollreading/`](scrollreading/README.md) | Provides a separate, seed-based workflow for finding and flattening local surface patches. |
+| [`surface_detection/`](surface_detection/README.md) | Contains the Kaggle-based surface segmentation workflow for TIFF stacks. |
 
-The final step is to run **spiral fitting**, which combines the available evidence into one consistent global solution for the scroll. Once a global solution has been obtained, the scroll can be unwrapped.
+The component guides document code sources and setup. Root-level
+`data/`, `checkpoints/`, and `out/` are ignored by Git and can hold local
+volumes, downloaded model weights, and run artifacts.
 
-The overall pipeline would look approximately like this:
+## Getting started
 
-1. Run surface detection
-2. Collect evidence (e.g., use `scrollreading` to find surface patches)
-3. Run spiral fitting
-4. Unwrap the scroll
+The [PHercParis4 fitting example](spiral_fitting/README.md#getting-started)
+shows how to set up the environment, download published inputs, and fit a
+selected slice range.
 
+For a new scan region, align the generated inputs with the scroll axis and
+any annotations in the same voxel coordinate system. Register the files in
+[`spiral-scroll.json`](spiral_fitting/villa_8aa507c/README.md#scroll-specification-spiral-scrolljson)
+and select the corresponding slice range in the fit configuration.
+
+## Project status
+
+This project is a work in progress.
 
 ## Useful Links
 
-- [Vesuvius Challenge (scrollprize.org)](https://scrollprize.org/)
-- [Tutorial: Spiral Fitting](https://scrollprize.org/tutorial_spiral)
-- [Virtual Unwrapping with VC3D](https://scrollprize.org/tutorial_VC3D)
-- [Tutorial: Segmentation (VC3D, Archive)](https://scrollprize.org/segmentation)
-
-
-## Installing VC3D
-
-Download and install VC3D by following the [official installation instructions](https://scrollprize.org/tutorial_VC3D).
-
-Alternatively, you can run VC3D on Windows using Docker inside WSL. This approach worked for me.
-
-### Running VC3D with Docker in WSL
-
-Pull the Docker image:
-
-```bash
-docker pull ghcr.io/scrollprize/villa/volume-cartographer:edge
-```
-
-Allow local Docker containers to access the X11 display:
-
-```bash
-xhost +local:docker
-```
-
-Start the container:
-
-```bash
-docker run \
-  -v /tmp/.X11-unix:/tmp/.X11-unix \
-  -it \
-  -e DISPLAY=$DISPLAY \
-  --gpus all \
-  -e QT_QPA_PLATFORM=xcb \
-  -e QT_X11_NO_MITSHM=1 \
-  --rm \
-  ghcr.io/scrollprize/villa/volume-cartographer:edge
-```
-
-Once inside the container, navigate to the directory containing the VC3D executable and launch the application:
-
-```bash
-cd /usr/local/bin
-VC3D
-```
-
-**Note:** Running VC3D this way requires a working X11 display configuration in WSL and, if GPU acceleration is needed, compatible NVIDIA GPU support. The commands above worked in my setup, but additional configuration may be required on other systems.
+- [Vesuvius Challenge spiral fitting tutorial](https://scrollprize.org/tutorial_spiral)
+- [Vesuvius Challenge](https://scrollprize.org/)
+- [Virtual unwrapping with VC3D](https://scrollprize.org/tutorial_VC3D)
+- [VC3D segmentation tutorial (archived)](https://scrollprize.org/segmentation)
+- [ScrollPrize/villa (Vesuvius Challenge code repository)](https://github.com/ScrollPrize/villa)
