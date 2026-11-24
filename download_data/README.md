@@ -31,6 +31,10 @@ python download_zarr_from_url.py <url_to_zarr> <output_path> \
 
 Creates `<output_path>/<remote_name>.zarr` using the remote Zarr's directory name, plus `meta.json` with source and coordinate metadata. Local indices start at zero; add the source region's start coordinates to recover source indices. An existing output Zarr requires `--resume`. Completed blocks are tracked in `progress.txt`, which is removed after a successful download.
 
+> **Warning:** Cropped downloads start at local index zero. Convert mesh
+> coordinates to the selected array's resolution, then subtract the crop origin
+> recorded in `meta.json`; scaling alone is insufficient.
+
 **Example: Download a region of Scroll 332**
 
 ```bash

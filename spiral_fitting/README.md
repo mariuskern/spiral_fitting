@@ -42,10 +42,12 @@ Relative paths in `.env` and command-line arguments are resolved against
     rclone copy :http: ./spiral_datasets/phercparis4 \
     --http-url https://dl.ash2txt.org/datasets/spiral_datasets/PHercParis4/ \
     --transfers 25 \
-    --checkers 2 \
+    --checkers 4 \
     --retries 20 \
     -P
     ```
+
+    To update the dataset, rerun the command with `sync` instead of `copy` (this also removes local files that no longer exist on the server).
 
     Alternatively, the dataset can be downloaded from Hugging Face:
 
@@ -60,6 +62,18 @@ Relative paths in `.env` and command-line arguments are resolved against
     python ../download_data/fetch_tree.py --download --manifest m.jsonl --shard 0:4 --jobs 32
     python ../download_data/fetch_tree.py --direct outer_shell fibers tracks abs_winding.json patch-overlap-pcls.json relative_windings.json same_windings.json umbilicus.json
     ```
+
+    The corresponding CT volume for this PHercParis4 spiral-fitting dataset is
+    `20260411134726-2.400um-0.2m-78keV-masked.zarr`. The annotations use
+    **9.6 µm voxels**, corresponding to level `2` of this **2.4 µm** scan;
+    multiply their coordinates by `4` to obtain level-0 coordinates. Use
+    `voxel_size_um: 9.6` for a fit using these annotations. The CT scan is
+    available separately from the fitting inputs:
+
+    - [CT volume](https://vesuvius-challenge-open-data.s3.amazonaws.com/index.html#PHercParis4/volumes/20260411134726-2.400um-0.2m-78keV-masked.zarr/) (CT scan corresponding to the spiral-fitting dataset)
+    - [Spiral dataset](https://dl.ash2txt.org/datasets/spiral_datasets/PHercParis4/) (PHercParis4 spiral-fitting inputs)
+    - [Spiral dataset README](https://scrollprize.org/data/datasets/spiral-input-PHercParis4-README.md) (contents and coordinate conventions of the spiral-fitting dataset)
+    - [Spiral dataset overview](https://scrollprize.org/data_datasets#spiral-input-2026-07) (page linking to the dataset and its README)
 
 3. Adjust the fitting configuration
 
@@ -123,7 +137,7 @@ Relative paths in `.env` and command-line arguments are resolved against
     {
         "schema_version": 1,
         "name": "PHercParis4",
-        "voxel_size_um": 0.08,
+        "voxel_size_um": 9.6,
         "spiral_outward_sense": "CW",
         "paths": {
             "tracks_dbm": "tracks/tracks.dbm"
@@ -136,8 +150,10 @@ Relative paths in `.env` and command-line arguments are resolved against
 
 The spiral fit can use *tracks* as input. They are skeletonized 2D curves through a binarized surface prediction. This section describes how to generate them from a volume. The steps assume that the python environment from `Getting Started` is active.
 
-For a separate TIFF-based workflow, see the [Surface Detection guide](../surface_detection/README.md).
-To explore another way of finding surface patches, see the [scrollreading guide](../scrollreading/README.md).
+Scroll volumes for generating your own inputs can be found here:
+
+- [Data Browser](https://scrollprize.org/data_browser) — browse available scrolls and their downloads, including [PHercParis4](https://scrollprize.org/data_browser/PHercParis4).
+- [Scroll data server](https://dl.ash2txt.org/) — another source for scroll volumes and related data.
 
 All paths below are examples. Replace them with your own.
 
@@ -222,7 +238,7 @@ All paths below are examples. Replace them with your own.
     {
         "schema_version": 1,
         "name": "PHercParis4",
-        "voxel_size_um": 0.08,
+        "voxel_size_um": 9.6,
         "spiral_outward_sense": "CW",
         "paths": {
             "tracks_dbm": "tracks/tracks.dbm"
@@ -481,41 +497,174 @@ This guide installs the VC binaries in your home directory using an Apptainer co
     If these commands work, the VC binaries are successfully accessible from your shell without having to manually invoke Apptainer.
 
 
-## Getting started with `render_ink.py`
+## Creating segments for 2D ink detection with VC3D
 
-The python environment should have already been created as described in `Getting Started` and the **VC binaries** should have been installed as described in `Installing the VC binaries`.
+Use the VC binaries installed above to flatten the fit's `_spliced` winding
+meshes and render CT layers for ink detection. These commands work with the
+old `edge` container (2026-05-13).
 
-1. Download the dataset:
+The fit uses **9.6 µm coordinates**; `--scale-segmentation 4` maps them to the
+**2.4 µm CT scan**. The function below defaults to the faster **9.6 µm**
+export. Choose the resolution and layer count to match your ink model and
+keep the layers as a stack. Lower-resolution CT levels also lose depth detail.
+For cropped CT downloads, see the [coordinate warning](../download_data/README.md#download_zarr_from_urlpy).
 
-    ```bash
-    wget https://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/volumes_zarr_standardized/54keV_7.91um_Scroll1B.7z
-    ```
+> **Container bug:** The old `flatboi` W&B logger hangs if no parent folder ends
+> in `.volpkg`. Using `work.volpkg` below avoids this; disabling W&B also works.
+> The renderer also shares temporary buffers between threads, causing crashes
+> or incorrect data. The function below uses one CPU thread to avoid this race.
 
-2. Unpack the dataset
+### Set the variables
 
-    ```bash
-    conda install -c conda-forge 7zip
-    
-    7z x 54keV_7.91um_Scroll1B.7z
+Run the blocks in the same Bash session. Use absolute paths and a new output
+directory. `CT_VOLUME` can be an HTTPS URL or the path to a complete local Zarr.
 
-    mkdir extracted
-    tar -xf 54keV_7.91um_Scroll1B -C extracted
-    ```
+```bash
+CT_VOLUME=https://vesuvius-challenge-open-data.s3.us-east-1.amazonaws.com/PHercParis4/volumes/20260411134726-2.400um-0.2m-78keV-masked.zarr
+MESHES_DIR=/absolute/path/to/run/meshes/fitted
+OUTPUT_DIR=/absolute/path/to/segment-export
+```
 
-    Optional: Use `tar.zst` for faster unpacking:
+### Choose logging with or without W&B
 
-    ```bash
-    tar -I 'zstd -T0' -cf <dataset>.tar.zst <dataset>/
-    tar -I 'zstd -T0' -xf <dataset>.tar.zst
-    ```
+Run **one** of these alternatives.
 
-3. Run `render_ink.py`
+**Without logging:**
 
-    ```bash
-    python villa_8aa507c/render_ink.py --volume <path_to_dataset> <path_to_fit_spiral_output>/meshes/fitted/ --lasagna-dir lasagna
-    ```
+```bash
+export WANDB_DISABLED=true APPTAINERENV_WANDB_DISABLED=true
+```
 
-    Add `--lasagna-device cpu` to run it on a cpu
+**With W&B logging:**
+
+Use the SIF from your `vc` wrapper. Replace the W&B user/team and enter your
+API key when prompted. The container already includes `wandb`.
+
+```bash
+VC_IMAGE=/absolute/path/to/volume-cartographer.sif
+unset WANDB_DISABLED APPTAINERENV_WANDB_DISABLED
+export APPTAINERENV_WANDB_PROJECT=spiral-flattening
+export APPTAINERENV_WANDB_ENTITY=YOUR_USER_OR_TEAM
+export APPTAINERENV_WANDB_MODE=online
+apptainer exec "$VC_IMAGE" wandb login
+```
+
+`APPTAINERENV_` passes settings into the container. Use mode `offline` instead
+of `online` to save W&B runs locally without uploading them.
+
+### Define the export function
+
+Arguments: `export_segment MESH [CT_LEVEL] [LAYERS]`. The default is level `2`
+with 16 layers. Each resolution gets its own output folder.
+
+```bash
+export_segment() (
+    set -euo pipefail
+    mesh="$1"
+    name="$(basename "$mesh")"
+    group="${2:-2}"
+    case "$group" in
+        0) slice_step=1; voxel_size=2.4; num_slices="${3:-64}" ;;
+        1) slice_step=2; voxel_size=4.8; num_slices="${3:-32}" ;;
+        2) slice_step=4; voxel_size=9.6; num_slices="${3:-16}" ;;
+        *) echo "CT_LEVEL must be 0, 1 or 2" >&2; exit 2 ;;
+    esac
+    work="$OUTPUT_DIR/work.volpkg/$name"
+    segment_name="${name}_${voxel_size}um"
+    segment="$OUTPUT_DIR/segments/$segment_name"
+    mkdir -p "$work" "$OUTPUT_DIR/segments"
+
+    # Flatten the mesh using VC3D's SLIM workflow.
+    vc_tifxyz2obj "$mesh" "$work/surface.obj"
+    flatboi "$work/surface.obj" 50 symmetric_dirichlet
+    vc_obj2tifxyz "$work/surface_flatboi.obj" "$segment" --uv-metric
+
+    volume_args=(--volume "$CT_VOLUME")
+    if [[ "$CT_VOLUME" == http://* || "$CT_VOLUME" == https://* ]]; then
+        volume_args=(--volume "$work/ct-reference.zarr" --remote-url "$CT_VOLUME")
+    fi
+
+    # Sample the original CT around the flattened surface.
+    OMP_NUM_THREADS=1 APPTAINERENV_OMP_NUM_THREADS=1 \
+    vc_render_tifxyz \
+        "${volume_args[@]}" \
+        --segmentation "$segment" \
+        --scale-segmentation 4 \
+        --group-idx "$group" --scale 1 \
+        --num-slices "$num_slices" --slice-step "$slice_step" \
+        --voxel-size "$voxel_size" --voxel-unit micrometer \
+        --pyramid false \
+        --zarr-output "$segment/$segment_name.zarr"
+)
+```
+
+For URLs, the function supplies the old renderer's required local reference
+path internally. The CT stays remote; it is not copied into `OUTPUT_DIR`.
+
+The renderer options mean:
+
+| Option | Purpose |
+| --- | --- |
+| `--volume`, `--remote-url` | Select the local CT or streamed CT source; derived from `CT_VOLUME`. |
+| `--segmentation` | The flattened surface to sample. |
+| `--scale-segmentation 4` | Map the mesh's 9.6 µm coordinates to the original scan coordinates. Keep `4` for all three CT levels. |
+| `--group-idx` | Input CT level: `0` = 2.4 µm, `1` = 4.8 µm, `2` = 9.6 µm. |
+| `--scale 1` | One output pixel per voxel of the selected CT level across the sheet. |
+| `--num-slices` | Number of layers around the surface. |
+| `--slice-step` | Layer spacing in original scan voxels in this old container: `1`, `2`, `4` give 2.4, 4.8, 9.6 µm. |
+| `--voxel-size`, `--voxel-unit` | Record the output spacing in the Zarr metadata. These values do not rescale the mesh. |
+| `--pyramid false` | Write only output array `0`, without additional downsampled levels. |
+| `--zarr-output` | Destination for the rendered CT stack. |
+
+The paired `slice-step` and `voxel-size` settings above are specific to this
+old container and produce matching spacing in all three output axes.
+
+### Export a single segment at different resolutions
+
+For example, render the same winding at any of these resolutions:
+
+```bash
+export_segment "$MESHES_DIR/w020_spliced" 0 64  # 2.4 µm
+export_segment "$MESHES_DIR/w020_spliced" 1 32  # 4.8 µm
+export_segment "$MESHES_DIR/w020_spliced" 2 16  # 9.6 µm (default)
+```
+
+Replace `w020_spliced` with an actual mesh folder from your fit, including any
+run tag. These examples cover approximately the same physical depth range
+(154 µm); fewer pixels and layers make coarser exports cheaper. Actual runtime
+also depends on CT downloads. Change the third argument if your model needs
+a different layer count, for example `export_segment "$MESHES_DIR/w020_spliced" 2 64`.
+
+The 9.6 µm result is `$OUTPUT_DIR/segments/w020_spliced_9.6um/`, containing the
+flattened mesh and `w020_spliced_9.6um.zarr`. Its **array `0` is already at
+9.6 µm**; the input CT level does not determine the output array name.
+
+### Export all segments
+
+Use this for all windings at 9.6 µm. Change the last two arguments as in the
+examples above for another resolution. Use a fresh `OUTPUT_DIR` when repeating
+an export at the same resolution.
+
+```bash
+set -e
+shopt -s nullglob
+for mesh in "$MESHES_DIR"/w[0-9]*_spliced*; do
+    [[ -d "$mesh" && -f "$mesh/meta.json" ]] || continue
+    export_segment "$mesh" 2 16
+done
+```
+
+Each winding becomes a separate segment. Use its CT stack for
+[ink detection](https://scrollprize.org/tutorial5).
+
+> **Note:** zarr to tiff conversion is described in the
+> [Download Data README](../download_data/README.md#zarr_to_tiffpy).
+> Use `--array 0` for these exports; the resolution was selected during rendering.
+
+## `render_ink.py`
+
+`render_ink.py` takes an existing 3D ink-detection prediction volume as input
+and renders it through the spiral-fitting surfaces into 2D images.
 
 
 ## Sources
