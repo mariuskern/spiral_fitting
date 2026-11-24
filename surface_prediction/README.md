@@ -110,6 +110,10 @@ Relative paths in `.env` and command-line arguments are resolved against
     directory for each run. The three paths are required, either through `.env`,
     shell environment variables, or command-line arguments.
 
+    The launcher expands `$VAR`, `${VAR}`, and `~` in the three path arguments.
+    Environment variables used in paths must be exported in the shell running
+    the pipeline.
+
     To reduce tile memory usage, optionally add:
 
     ```dotenv

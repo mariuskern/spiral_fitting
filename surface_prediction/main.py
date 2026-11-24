@@ -3,6 +3,7 @@
 import argparse
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -163,6 +164,15 @@ def validate_arguments(parser, args):
 
     if missing:
         parser.error("Missing configuration: provide " + ", ".join(missing))
+
+    for name in ("model_path", "input_dir", "output_dir"):
+        value = os.path.expanduser(os.path.expandvars(getattr(args, name)))
+        unresolved = re.findall(r"\$\{[^}]+\}|\$[A-Za-z_][A-Za-z0-9_]*", value)
+        
+        if unresolved:
+            parser.error(f"--{name} / {name.upper()} contains unset environment variables: " + ", ".join(unresolved))
+
+        setattr(args, name, value)
 
     if args.num_parts < 1:
         parser.error("--num_parts must be at least 1")
