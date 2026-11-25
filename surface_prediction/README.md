@@ -155,9 +155,7 @@ Relative paths in `.env` and command-line arguments are resolved against
     python main.py -- --disable_tta
     ```
 
-6. Inspect or export the results
-
-    The output directory contains:
+    The output directory should contain the following:
 
     | Path | Contents |
     | --- | --- |
@@ -165,16 +163,7 @@ Relative paths in `.env` and command-line arguments are resolved against
     | `merged_logits.zarr` | Blended logits |
     | `final_output.zarr` | Final probabilities or mask, depending on the threshold settings |
 
-    To convert the final output to TIFF, use
-    [zarr_to_tiff.py](../download_data/README.md#zarr_to_tiffpy):
-
-    ```bash
-    python ../download_data/zarr_to_tiff.py out/run_01/final_output.zarr out/run_01_tiff
-    ```
-
-    The converter supports `(Z,Y,X)` and `(1,Z,Y,X)` volumes.
-    `--delete_intermediates` removes only `merged_logits.zarr` after successful
-    finalization; `logits/` is retained.
+6. Visualize the results using the [ScrollSlabViewer](https://paul-g2.github.io/ScrollSlabViewer/).
 
 ## Configuration reference
 

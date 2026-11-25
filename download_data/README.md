@@ -71,7 +71,7 @@ Converts a TIFF image stack into a Zarr volume.
 **Usage:**
 
 ```bash
-python utils/tiff_to_zarr.py <input.tiff> <output.zarr> --mul 255
+python download_data/tiff_to_zarr.py <input.tiff> <output.zarr> --mul 255
 ```
 
 The `--mul 255` option multiplies the input values by 255. This is useful when converting normalized intensity values in the range 0-1 to the range 0-255.

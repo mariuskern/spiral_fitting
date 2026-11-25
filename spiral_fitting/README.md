@@ -102,6 +102,14 @@ Relative paths in `.env` and command-line arguments are resolved against
 
     The values specified in `FIT_SPIRAL_CONFIG_OVERRIDES` override the corresponding default values from `villa_8aa507c/config.py`.
 
+    Tracks are disabled by default. To use them in the fit, add
+    `"input_use_tracks": true` to your existing `FIT_SPIRAL_CONFIG_OVERRIDES`
+    object in `.env`. For example:
+
+    ```bash
+    FIT_SPIRAL_CONFIG_OVERRIDES='{"z_begin": 4000, "z_end": 5000, "input_use_tracks": true}'
+    ```
+
     The following environment variables can be used to control the pipeline run and override default settings:
 
     | Variable | Description |
@@ -145,6 +153,11 @@ Relative paths in `.env` and command-line arguments are resolved against
     }
     ```
 
+    When using tracks, set `paths.tracks_dbm` to the database path relative to
+    the dataset folder, as shown above. The default path is
+    `tracks/2um_ds2_ps256_surf_v2.dbm`; set the path explicitly if your database
+    has a different name or there are several databases in `tracks/`.
+
 
 ## Generating the spiral fit input
 
@@ -157,24 +170,27 @@ Scroll volumes for generating your own inputs can be found here:
 
 All paths below are examples. Replace them with your own.
 
-1. Run the surface prediction as described in the [Surface Prediction README](../surface_prediction/README.md).
+1. Generate the surface prediction
 
-2. Check the prediction and convert it to 3D
+    Follow the [surface prediction README](../surface_prediction/README.md).
 
-    The track extraction expects a 3D array in `(Z, Y, X)` order. The finalized prediction may contain an additional channel axis `(C, Z, Y, X)`, which makes the extraction fail with `DimensionError: Only 1D, 2D, and 3D arrays supported. Got: 4`.
+2. Inspect the prediction and convert it to 3D if needed
 
-    First inspect the prediction. This prints the shape, the data type and the values of the middle slice for each channel:
+    The track extraction expects a 3D array in `(Z, Y, X)` order. The finalized prediction may contain an additional channel axis `(C, Z, Y, X)`.
+
+    Use the following command to inspect the array shape, data type, and a sample of values from the middle slice of each channel:
 
     ```bash
     python squeeze_preciction.py <path_to_prediction_run>/final_output.zarr
     ```
 
-    Check that the values are binary (0/1) and that the fraction of values `> 0` is plausible. Then write a 3D copy:
+    If the prediction has a channel axis, use the following command to extract one channel and save it as a 3D array. By default, channel 0 is selected:
 
     ```bash
-    python squeeze_preciction.py <path_to_prediction_run>/final_output.zarr \
-        --out <path_to_prediction_run>/surface_3d.zarr
+    python squeeze_preciction.py <path_to_prediction_run>/final_output.zarr --out <path_to_prediction_run>/surface_3d.zarr
     ```
+
+    To binarize the selected channel in the same step, add `--threshold 127` (or another threshold appropriate for your prediction).
 
     Useful options:
 
@@ -224,32 +240,11 @@ All paths below are examples. Replace them with your own.
     > - The extraction resumes: slabs that are already in the database are skipped, so an interrupted run can be restarted with the same arguments.
     > - The tracks must be in the same voxel frame as the other inputs of the fit (umbilicus, patches, `z_begin` / `z_end`) and should cover at least the z range that is fitted. Tracks outside the fit window are dropped when loading.
 
-4. Use the tracks in the fit
-
-    Tracks are disabled by default. Enable them in the `.env` file:
-
-    ```bash
-    FIT_SPIRAL_CONFIG_OVERRIDES='{"z_begin": 4000, "z_end": 5000, "input_use_tracks": true}'
-    ```
-
-    The fit looks for `tracks/2um_ds2_ps256_surf_v2.dbm` in the dataset. If the database has a different name, or if there are several databases in `tracks/`, set the path in `spiral-scroll.json`:
-
-    ```json
-    {
-        "schema_version": 1,
-        "name": "PHercParis4",
-        "voxel_size_um": 9.6,
-        "spiral_outward_sense": "CW",
-        "paths": {
-            "tracks_dbm": "tracks/tracks.dbm"
-        }
-    }
-    ```
-
-    Then run the fit as described in `Getting Started`.
+    To use the generated tracks in the fit, configure their path and enable
+    track input as described in [Getting Started](#getting-started).
 
 
-5. Grow graph patches from tracks
+4. Grow graph patches from tracks
 
     Run this command from `spiral_fitting/` after extracting the tracks and building
     their crossing cache:
@@ -258,8 +253,8 @@ All paths below are examples. Replace them with your own.
     python generate_graph_patches.py \
         --tracks <path_to_dataset>/tracks/tracks.dbm \
         --out <path_to_dataset>/graph_patches \
-        --random-count <number_of_patches> \
-        --workers <number_of_workers>
+        --random-count 1000 \
+        --workers 16
     ```
 
     Replace all placeholders with your paths and positive integer counts. The helper
@@ -276,12 +271,12 @@ All paths below are examples. Replace them with your own.
     `input_use_verified_patches` enabled.
 
 
-6. Generate fiber direction samples
+5. Generate fiber direction samples
 
     Requires an existing fiber prediction: download one from
     `<scroll>/representations/predictions/fibers/` in the open-data bucket or
     create one using the [Lasagna guide](../lasagna/README.md).
-    Its `.lasagna.json` manifest must be served over HTTP(S).
+    It writes `presence`, `nx` and `ny` channels plus a `.lasagna.json` manifest. Serve the prediction folder over HTTP (e.g. using `python3 -m http.server`).
 
     From `spiral_fitting/`, in the fitting environment:
 
@@ -300,6 +295,63 @@ All paths below are examples. Replace them with your own.
     exported file (relative to the dataset), then enable
     `input_use_fiber_directions=true` and `loss_weight_fiber_directions>0`.
     The loss constrains sheet orientation, not winding assignment.
+
+
+6. Create umbilicus.json
+
+    The `umbilicus.json` contains points along the centerline of the wooden winding core, in dataset voxel coordinates. It should contain at least two points with different z values. It should look like this (replace the example coordinates with your own):
+
+    ```json
+    {
+        "control_points": [
+            {"x": 400, "y": 400, "z": 0},
+            {"x": 410, "y": 405, "z": 799}
+        ]
+    }
+    ```
+
+
+7. Assemble the spiral fitting dataset
+
+    Place your outputs in the following layout for spiral fitting:
+
+    ```text
+    spiral_fitting_dataset/
+    ├── verified_patches/        <-- Place your graph patches here, one tifxyz directory per patch
+    ├── tracks/                  <-- Place your extracted tracks here
+    │   ├── tracks.dbm
+    │   ├── tracks.dbm.vctracks/
+    │   └── tracks.dbm.crossings.npz
+    ├── umbilicus.json           <-- Save your scroll centerline here
+    ├── fiber_directions.npz     <-- Place your extracted fiber directions here, if available
+    └── spiral-scroll.json       <-- Save your scroll specification here
+    ```
+
+    The `spiral-scroll.json` should contain the following:
+
+    ```json
+    {
+        "schema_version": 1,
+        "name": "<name>",
+        "voxel_size_um": "<size>",
+        "spiral_outward_sense": "CW",
+        "paths": {
+            "tracks_dbm": "tracks/tracks.dbm"
+        }
+    }
+    ```
+
+
+8. Run spiral fitting
+
+    Use the following overrides in the `.env`
+
+    ```
+    FIT_SPIRAL_CONFIG_OVERRIDES='{"z_begin": 0, "z_end": 800, "optimizer_num_training_steps": 5000, "dense_spacing_mode": "grad_mag", "input_use_tracks": true, "input_use_outer_shell": false, "input_use_normals": false, "input_use_gradient_magnitude": false}'
+    ```
+
+
+9. Generate winding 
 
 
 ## Installing VC3D
