@@ -1,0 +1,8 @@
+numpy
+scipy
+scikit-image
+pillow
+zarr>=3
+tifffile
+tqdm
+cupy-cuda12x>=14
