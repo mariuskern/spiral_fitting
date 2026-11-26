@@ -19,7 +19,10 @@ def parse_args(argv=None):
     parser.add_argument("--z-range", type=float, nargs=2, metavar=("MIN", "MAX"), help="Inclusive original Z range")
     parser.add_argument("--z-exaggeration", type=float, default=1)
     parser.add_argument("--hide-labels", action="store_true")
-    parser.add_argument("--ct", nargs="?", const="auto", help="CT path; without a path, infer it from the source pipeline config")
+    parser.add_argument("--ct", nargs="?", const="auto",
+                        help="Optional CT overlay; omit --ct for constraints only. With --ct but no path, infer CT from the source pipeline config")
+    parser.add_argument("--no-ct", action="store_true",
+                        help="Disable all CT loading and path inference; overrides --ct and ignores CT options")
     parser.add_argument("--ct-dataset", help="Array path inside a CT Zarr group")
     parser.add_argument("--ct-scale", type=float, nargs=3, metavar=("Z", "Y", "X"),
                         help="CT voxel to original voxel factors (explicit CT default: 1 1 1)")
@@ -34,6 +37,9 @@ def parse_args(argv=None):
         parser.error("--z-exaggeration must be positive and finite")
     if args.z_range is not None and (not np.isfinite(args.z_range).all() or args.z_range[0] > args.z_range[1]):
         parser.error("--z-range requires finite MIN <= MAX")
+    if args.no_ct:
+        args.ct = None
+        return args
     if not args.ct and (args.ct_dataset is not None or args.ct_scale is not None or args.slice is not None or
                         args.ct_window is not None or args.slice_thickness is not None or any(args.ct_origin)):
         parser.error("CT options require --ct [PATH]")

@@ -5,4 +5,5 @@ pillow
 zarr>=3
 tifffile
 tqdm
-cupy-cuda12x>=14
+cupy-cuda12x[ctk]>=14
+matplotlib

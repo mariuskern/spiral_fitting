@@ -9,6 +9,42 @@ import zarr
 from tqdm import tqdm
 
 
+def _open_zarr(input_dir):
+    """Read legacy uint8 metadata without modifying the source store."""
+    
+    if int(zarr.__version__.split(".")[0]) < 3:
+        return zarr.open(input_dir, mode="r")
+
+    from zarr.storage import LocalStore, WrapperStore
+
+    class CanonicalUint8Store(WrapperStore):
+        async def get(self, key, prototype, byte_range=None):
+            value = await super().get(key, prototype, byte_range)
+            if value is None or byte_range is not None:
+                return value
+
+            name = key.rsplit("/", 1)[-1]
+            if name not in (".zarray", ".zmetadata"):
+                return value
+
+            metadata = json.loads(value.to_bytes())
+            documents = (
+                metadata.get("metadata", {}).values()
+                if name == ".zmetadata" else [metadata]
+            )
+            changed = False
+            for document in documents:
+                # Byte order has no effect on a single-byte unsigned integer.
+                if document.get("dtype") in ("<u1", ">u1"):
+                    document["dtype"] = "|u1"
+                    changed = True
+            if changed:
+                return prototype.buffer.from_bytes(json.dumps(metadata).encode("utf-8"))
+            return value
+
+    return zarr.open(CanonicalUint8Store(LocalStore(input_dir, read_only=True)), mode="r")
+
+
 def _get_arguments():
     parser = argparse.ArgumentParser(
         description="Convert all downloaded Zarr segments into TIFF stacks while preserving the directory structure."
@@ -75,7 +111,7 @@ def convert_zarr(input_dir, output_dir, array, prefix, digits, overwrite, compre
     # --------------------------------------------------------
 
     print("Opening Zarr...")
-    z = zarr.open(input_dir, mode="r")
+    z = _open_zarr(input_dir)
     print("Zarr structure:")
     print(z if isinstance(z, zarr.Array) else z.tree())
     print("")

@@ -11,18 +11,13 @@ This folder contains the code and configuration required to run the spiral fitti
 | [`generate_fiber_directions.py`](generate_fiber_directions.py) | Export fiber direction samples from an existing prediction. |
 | [`generate_graph_patches.py`](generate_graph_patches.py) | Grow graph patches (tifxyz) from tracks using `grow_track_graph`. |
 | [`squeeze_preciction.py`](squeeze_preciction.py) | Inspect a prediction and copy one channel of a 4D array to a 3D Zarr. |
+| [`visualize_meshes.py`](visualize_meshes.py) | Overlay winding meshes on CT cross-sections with a shared colorbar. |
 
 ## Getting Started
 
-Run the following commands from the `spiral_fitting/` directory. From the
-repository root, enter it first:
+Run the following commands from the `spiral_fitting/` directory.
 
-```bash
-cd spiral_fitting
-```
-
-Relative paths in `.env` and command-line arguments are resolved against
-`spiral_fitting/` when starting the pipeline from this directory.
+Relative paths in `.env` and command-line arguments are resolved against `spiral_fitting/` when starting the pipeline from this directory.
 
 1. Create the python environment:
 
@@ -38,6 +33,13 @@ Relative paths in `.env` and command-line arguments are resolved against
 
 2. Download the dataset:
 
+    Datasets can be found here:
+    - [https://dl.ash2txt.org/datasets/spiral_datasets/](https://dl.ash2txt.org/datasets/spiral_datasets/)
+    - [https://huggingface.co/buckets/scrollprize/datasets/tree/spiral](https://huggingface.co/buckets/scrollprize/datasets/tree/spiral)
+
+
+    Download a dataset from dl.ash2txt.org using:
+
     ```bash
     rclone copy :http: ./spiral_datasets/phercparis4 \
     --http-url https://dl.ash2txt.org/datasets/spiral_datasets/PHercParis4/ \
@@ -47,7 +49,9 @@ Relative paths in `.env` and command-line arguments are resolved against
     -P
     ```
 
-    To update the dataset, rerun the command with `sync` instead of `copy` (this also removes local files that no longer exist on the server).
+    To update an already downloaded dataset, rerun the command with `sync` instead of `copy` (this also removes local files that no longer exist on the server).
+
+    Use `mktemp -d` to create a temporary folder without a file limit when working on the HPC Cluster.
 
     Alternatively, the dataset can be downloaded from Hugging Face:
 
@@ -63,13 +67,7 @@ Relative paths in `.env` and command-line arguments are resolved against
     python ../download_data/fetch_tree.py --direct outer_shell fibers tracks abs_winding.json patch-overlap-pcls.json relative_windings.json same_windings.json umbilicus.json
     ```
 
-    The corresponding CT volume for this PHercParis4 spiral-fitting dataset is
-    `20260411134726-2.400um-0.2m-78keV-masked.zarr`. The annotations use
-    **9.6 µm voxels**, corresponding to level `2` of this **2.4 µm** scan;
-    multiply their coordinates by `4` to obtain level-0 coordinates. Use
-    `voxel_size_um: 9.6` for a fit using these annotations. The CT scan is
-    available separately from the fitting inputs:
-
+    The corresponding CT volume for the PHercParis4 spiral-fitting dataset is `20260411134726-2.400um-0.2m-78keV-masked.zarr`. The annotations use **9.6 µm voxels**, corresponding to level `2` of this **2.4 µm** scan; multiply their coordinates by `4` to obtain level-0 coordinates. Use `voxel_size_um: 9.6` for a fit using these annotations. The CT scan is available separately from the fitting inputs:
     - [CT volume](https://vesuvius-challenge-open-data.s3.amazonaws.com/index.html#PHercParis4/volumes/20260411134726-2.400um-0.2m-78keV-masked.zarr/) (CT scan corresponding to the spiral-fitting dataset)
     - [Spiral dataset](https://dl.ash2txt.org/datasets/spiral_datasets/PHercParis4/) (PHercParis4 spiral-fitting inputs)
     - [Spiral dataset README](https://scrollprize.org/data/datasets/spiral-input-PHercParis4-README.md) (contents and coordinate conventions of the spiral-fitting dataset)
@@ -102,9 +100,7 @@ Relative paths in `.env` and command-line arguments are resolved against
 
     The values specified in `FIT_SPIRAL_CONFIG_OVERRIDES` override the corresponding default values from `villa_8aa507c/config.py`.
 
-    Tracks are disabled by default. To use them in the fit, add
-    `"input_use_tracks": true` to your existing `FIT_SPIRAL_CONFIG_OVERRIDES`
-    object in `.env`. For example:
+    Tracks are disabled by default. To use them in the fit, add `"input_use_tracks": true` to your existing `FIT_SPIRAL_CONFIG_OVERRIDES` object in `.env`. For example:
 
     ```bash
     FIT_SPIRAL_CONFIG_OVERRIDES='{"z_begin": 4000, "z_end": 5000, "input_use_tracks": true}'
@@ -157,6 +153,42 @@ Relative paths in `.env` and command-line arguments are resolved against
     the dataset folder, as shown above. The default path is
     `tracks/2um_ds2_ps256_surf_v2.dbm`; set the path explicitly if your database
     has a different name or there are several databases in `tracks/`.
+
+
+5. Visualize fitted meshes on CT slices
+
+    ```bash
+    python visualize_meshes.py \
+      ../out/53keV_7.91um_Scroll3/spiral_fitting/winding_model/2026-11-26_53keV_7.91um_Scroll3_slice-0-1000_410-patch \
+      --ct ../data/scrolls/53keV_7.91um_Scroll3/53keV_7.91um_Scroll3.zarr \
+      --num-slices 6 \
+      --mesh-range 10 36 \
+      --ct-window 0 255 \
+      --out ../out/53keV_7.91um_Scroll3/mesh_diagnostics/colored_sections.png
+    ```
+
+    | Argument | Description |
+    | --- | --- |
+    | `meshes` | Required path to a fit run, `meshes/`, or `meshes/fitted/`. |
+    | `--ct PATH` | Required CT Zarr array or group. Must use the same origin and voxel resolution as the meshes. |
+    | `--ct-dataset NAME` | Array inside the CT group (default: `0`); ignored for a direct array. |
+    | `--num-slices N` | Number of evenly spaced sections (default: `6`). Mutually exclusive with `--slices`. |
+    | `--slices Z [Z ...]` | Explicit CT Z indices. |
+    | `--z-range MIN MAX` | Inclusive Z range (default: overlap of meshes and CT). |
+    | `--meshes N [N ...]` | Select winding numbers. Mutually exclusive with `--mesh-range`. |
+    | `--mesh-range MIN MAX` | Inclusive winding-number range (default: all meshes). |
+    | `--mesh-step N` | Show every Nth mesh in the selected, sorted list (default: `1`). |
+    | `--spliced` | Use `wNNN_spliced` instead of `wNNN`. |
+    | `--columns N` | Maximum subplot columns (default: `3`). |
+    | `--cmap NAME` | Mesh color gradient (default: `turbo`). |
+    | `--colorbar-step N` | Label every Nth selected mesh (default: at most 16 labels). |
+    | `--line-width VALUE` | Mesh line width (default: `0.8`). |
+    | `--alpha VALUE` | Mesh opacity from `0` to `1` (default: `0.9`). |
+    | `--ct-window MIN MAX` | Grayscale limits (default: first displayed slice's nonzero 1st/99.5th percentiles). |
+    | `--xy-range XMIN XMAX YMIN YMAX` | Zoom all panels to the same XY rectangle in CT voxels. |
+    | `--out PATH` | Save an image instead of opening a Matplotlib window. |
+    | `--dpi N` | Export resolution (default: `160`). |
+    | `-h`, `--help` | Show usage and argument help. |
 
 
 ## Generating the spiral fit input
@@ -276,12 +308,13 @@ All paths below are examples. Replace them with your own.
     Requires an existing fiber prediction: download one from
     `<scroll>/representations/predictions/fibers/` in the open-data bucket or
     create one using the [Lasagna guide](../lasagna/README.md).
-    It writes `presence`, `nx` and `ny` channels plus a `.lasagna.json` manifest. Serve the prediction folder over HTTP (e.g. using `python3 -m http.server`).
+    It writes `presence`, `nx` and `ny` channels plus a `.lasagna.json` manifest. Use a local manifest path or an HTTP(S) URL; relative Zarr paths are resolved against the manifest.
 
     From `spiral_fitting/`, in the fitting environment:
 
     ```bash
-    python generate_fiber_directions.py http://localhost:8000/fiber.lasagna.json ../data/fiber_directions.npz --z-roi 0,800 --output-scale 1 --presence-threshold 160 --cell-size 2
+    pip install requests
+    python generate_fiber_directions.py /path/to/fiber.lasagna.json ../data/fiber_directions.npz --z-roi 0,800 --output-scale 1 --presence-threshold 160 --cell-size 2
     ```
 
     `--z-roi` is half-open in fit coordinates; `--output-scale` is scan `/0`
@@ -555,9 +588,10 @@ Use the VC binaries installed above to flatten the fit's `_spliced` winding
 meshes and render CT layers for ink detection. These commands work with the
 old `edge` container (2026-05-13).
 
-The fit uses **9.6 µm coordinates**; `--scale-segmentation 4` maps them to the
-**2.4 µm CT scan**. The function below defaults to the faster **9.6 µm**
-export. Choose the resolution and layer count to match your ink model and
+The defaults below are for **PHercParis4**: the fit uses **9.6 µm coordinates**
+and the CT scan has **2.4 µm voxels** at level `0`. The function derives the
+segmentation scale from these voxel sizes and defaults to a **9.6 µm** export.
+Choose the resolution and layer count to match your ink model and
 keep the layers as a stack. Lower-resolution CT levels also lose depth detail.
 For cropped CT downloads, see the [coordinate warning](../download_data/README.md#download_zarr_from_urlpy).
 
@@ -572,10 +606,35 @@ Run the blocks in the same Bash session. Use absolute paths and a new output
 directory. `CT_VOLUME` can be an HTTPS URL or the path to a complete local Zarr.
 
 ```bash
-CT_VOLUME=https://vesuvius-challenge-open-data.s3.us-east-1.amazonaws.com/PHercParis4/volumes/20260411134726-2.400um-0.2m-78keV-masked.zarr
-MESHES_DIR=/absolute/path/to/run/meshes/fitted
-OUTPUT_DIR=/absolute/path/to/segment-export
+export CT_VOLUME=https://vesuvius-challenge-open-data.s3.us-east-1.amazonaws.com/PHercParis4/volumes/20260411134726-2.400um-0.2m-78keV-masked.zarr
+export MESHES_DIR=/absolute/path/to/run/meshes/fitted
+export OUTPUT_DIR=/absolute/path/to/segment-export
+
+# PHercParis4 defaults. Match these to your fit and CT volume.
+export FIT_VOXEL_SIZE_UM=9.6  # voxel_size_um in the fit's spiral-scroll.json
+export CT_VOXEL_SIZE_UM=2.4   # CT voxel size at input level 0
+export CT_LEVEL=2            # input CT level; it must exist in CT_VOLUME
+export NUM_SLICES=16         # number of layers to render
 ```
+
+The segmentation scale is `FIT_VOXEL_SIZE_UM / CT_VOXEL_SIZE_UM`; it stays
+the same for every input CT level. Levels `0`, `1`, and `2` are assumed to
+have voxel sizes of `CT_VOXEL_SIZE_UM` times `1`, `2`, and `4`, respectively.
+The function derives the layer spacing, output voxel size, and folder name.
+
+For **53keV_7.91um_Scroll3** with a fit and local CT both at 7.91 µm, replace
+the four resolution/layer settings above with these values, and set
+`CT_VOLUME`, `MESHES_DIR`, and `OUTPUT_DIR` to the corresponding paths:
+
+```bash
+export FIT_VOXEL_SIZE_UM=7.91
+export CT_VOXEL_SIZE_UM=7.91
+export CT_LEVEL=0
+export NUM_SLICES=16
+```
+
+This gives a segmentation scale of `1` and a 7.91 µm output. A surface outside
+the CT volume still renders black; choose a winding inside the available scan.
 
 ### Choose logging with or without W&B
 
@@ -606,21 +665,27 @@ of `online` to save W&B runs locally without uploading them.
 
 ### Define the export function
 
-Arguments: `export_segment MESH [CT_LEVEL] [LAYERS]`. The default is level `2`
-with 16 layers. Each resolution gets its own output folder.
+Arguments: `export_segment MESH [CT_LEVEL] [LAYERS]`. Omitted arguments use
+the `CT_LEVEL` and `NUM_SLICES` environment variables defined above.
+Each resolution gets its own output folder.
 
 ```bash
 export_segment() (
     set -euo pipefail
     mesh="$1"
     name="$(basename "$mesh")"
-    group="${2:-2}"
+    group="${2:-$CT_LEVEL}"
+    num_slices="${3:-$NUM_SLICES}"
     case "$group" in
-        0) slice_step=1; voxel_size=2.4; num_slices="${3:-64}" ;;
-        1) slice_step=2; voxel_size=4.8; num_slices="${3:-32}" ;;
-        2) slice_step=4; voxel_size=9.6; num_slices="${3:-16}" ;;
+        0) slice_step=1 ;;
+        1) slice_step=2 ;;
+        2) slice_step=4 ;;
         *) echo "CT_LEVEL must be 0, 1 or 2" >&2; exit 2 ;;
     esac
+    scale_segmentation="$(awk -v fit="$FIT_VOXEL_SIZE_UM" -v ct="$CT_VOXEL_SIZE_UM" \
+        'BEGIN { printf "%.12g", fit / ct }')"
+    voxel_size="$(awk -v ct="$CT_VOXEL_SIZE_UM" -v step="$slice_step" \
+        'BEGIN { printf "%.12g", ct * step }')"
     work="$OUTPUT_DIR/work.volpkg/$name"
     segment_name="${name}_${voxel_size}um"
     segment="$OUTPUT_DIR/segments/$segment_name"
@@ -641,7 +706,7 @@ export_segment() (
     vc_render_tifxyz \
         "${volume_args[@]}" \
         --segmentation "$segment" \
-        --scale-segmentation 4 \
+        --scale-segmentation "$scale_segmentation" \
         --group-idx "$group" --scale 1 \
         --num-slices "$num_slices" --slice-step "$slice_step" \
         --voxel-size "$voxel_size" --voxel-unit micrometer \
@@ -659,11 +724,11 @@ The renderer options mean:
 | --- | --- |
 | `--volume`, `--remote-url` | Select the local CT or streamed CT source; derived from `CT_VOLUME`. |
 | `--segmentation` | The flattened surface to sample. |
-| `--scale-segmentation 4` | Map the mesh's 9.6 µm coordinates to the original scan coordinates. Keep `4` for all three CT levels. |
-| `--group-idx` | Input CT level: `0` = 2.4 µm, `1` = 4.8 µm, `2` = 9.6 µm. |
+| `--scale-segmentation` | Map fit coordinates to CT level-0 coordinates using `FIT_VOXEL_SIZE_UM / CT_VOXEL_SIZE_UM`: `4` for PHercParis4, `1` for the Scroll3 example. |
+| `--group-idx` | Input CT level from `CT_LEVEL` or the second function argument. For PHercParis4: `0` = 2.4 µm, `1` = 4.8 µm, `2` = 9.6 µm. |
 | `--scale 1` | One output pixel per voxel of the selected CT level across the sheet. |
-| `--num-slices` | Number of layers around the surface. |
-| `--slice-step` | Layer spacing in original scan voxels in this old container: `1`, `2`, `4` give 2.4, 4.8, 9.6 µm. |
+| `--num-slices` | Number of layers around the surface from `NUM_SLICES` or the third function argument. |
+| `--slice-step` | Layer spacing in original scan voxels in this old container: `1`, `2`, `4` for input CT levels `0`, `1`, `2`. Multiply by `CT_VOXEL_SIZE_UM` for the spacing in µm. |
 | `--voxel-size`, `--voxel-unit` | Record the output spacing in the Zarr metadata. These values do not rescale the mesh. |
 | `--pyramid false` | Write only output array `0`, without additional downsampled levels. |
 | `--zarr-output` | Destination for the rendered CT stack. |
@@ -673,12 +738,19 @@ old container and produce matching spacing in all three output axes.
 
 ### Export a single segment at different resolutions
 
-For example, render the same winding at any of these resolutions:
+To use the configured resolution and layer count:
+
+```bash
+export_segment "$MESHES_DIR/w020_spliced"
+```
+
+With the **PHercParis4** settings, you can also override the input level and
+layer count for an individual export:
 
 ```bash
 export_segment "$MESHES_DIR/w020_spliced" 0 64  # 2.4 µm
 export_segment "$MESHES_DIR/w020_spliced" 1 32  # 4.8 µm
-export_segment "$MESHES_DIR/w020_spliced" 2 16  # 9.6 µm (default)
+export_segment "$MESHES_DIR/w020_spliced" 2 16  # 9.6 µm
 ```
 
 Replace `w020_spliced` with an actual mesh folder from your fit, including any
@@ -687,22 +759,22 @@ run tag. These examples cover approximately the same physical depth range
 also depends on CT downloads. Change the third argument if your model needs
 a different layer count, for example `export_segment "$MESHES_DIR/w020_spliced" 2 64`.
 
-The 9.6 µm result is `$OUTPUT_DIR/segments/w020_spliced_9.6um/`, containing the
+With the PHercParis4 defaults, the result is `$OUTPUT_DIR/segments/w020_spliced_9.6um/`, containing the
 flattened mesh and `w020_spliced_9.6um.zarr`. Its **array `0` is already at
 9.6 µm**; the input CT level does not determine the output array name.
 
 ### Export all segments
 
-Use this for all windings at 9.6 µm. Change the last two arguments as in the
-examples above for another resolution. Use a fresh `OUTPUT_DIR` when repeating
-an export at the same resolution.
+Use this for all windings at the configured `CT_LEVEL` and `NUM_SLICES`
+(9.6 µm and 16 layers with the PHercParis4 defaults). Use a fresh `OUTPUT_DIR`
+when repeating an export at the same resolution.
 
 ```bash
 set -e
 shopt -s nullglob
 for mesh in "$MESHES_DIR"/w[0-9]*_spliced*; do
     [[ -d "$mesh" && -f "$mesh/meta.json" ]] || continue
-    export_segment "$mesh" 2 16
+    export_segment "$mesh"
 done
 ```
 

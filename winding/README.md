@@ -22,7 +22,7 @@ Tables list all arguments; commands show a typical selection. Flags take no valu
         --pred "<surface_prediction>" \
         --device "<device>" \
         --workers "<worker_count>" \
-        --min-cc "<min_component_voxels>" \
+        --min-cc "<min_component_voxels_eg_50>" \
         --out "<pipeline_out>" \
         --ct-dataset "<ct_dataset>"
     ```
@@ -96,6 +96,16 @@ Tables list all arguments; commands show a typical selection. Flags take no valu
 
 4. Visualize the constraints
 
+    CT is optional. Show the constraints in 3D and as an XY projection without loading a CT volume:
+
+    ```bash
+    python view_sheet_constraints.py "<constraints_out>" --no-ct
+    ```
+
+    `--no-ct` disables CT loading and path inference, even when `--ct` or other CT options are also supplied.
+
+    Add `--ct` for a browsable CT slice with nearby constraint points:
+
     ```bash
     python view_sheet_constraints.py "<constraints_out>" \
         --ct "<ct_volume>" \
@@ -111,7 +121,8 @@ Tables list all arguments; commands show a typical selection. Flags take no valu
     | `--z-range <min> <max>` | Inclusive display range in original Z voxels. |
     | `--z-exaggeration` | Visual stretch factor along Z. |
     | `--hide-labels` | Flag: hide constraint labels. |
-    | `--ct [<path>]` | CT slice view; omit the path to infer CT from the pipeline configuration. |
+    | `--ct [<path>]` | Optional CT slice view. Omit `--ct` for constraints only; pass `--ct` without a path to infer CT from the pipeline configuration. |
+    | `--no-ct` | Disable all CT loading and path inference. Overrides `--ct` and ignores CT options. |
     | `--ct-dataset` | Array path inside the CT Zarr group; omit for a standalone array. |
     | `--ct-scale <z> <y> <x>` | Factors mapping CT to original voxel coordinates. |
     | `--ct-origin <z> <y> <x>` | Original voxel coordinate of the first CT voxel; for cropped CT. |
@@ -120,6 +131,7 @@ Tables list all arguments; commands show a typical selection. Flags take no valu
     | `--ct-window <min> <max>` | Fixed CT grayscale intensity window. |
     | `--ct-alpha` | CT image opacity from `0` to `1`. |
     | `-h` / `--help` | Flag: show CLI help and exit. |
+
 
 ## Sources
 

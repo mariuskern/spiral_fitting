@@ -76,6 +76,9 @@ class Compute:
             try:
                 import cupy as cp
                 import cupyx.scipy.ndimage as cndi
+                # CuPy loads cuSOLVER lazily; check it before starting workers
+                # rather than failing at the first structure-tensor eigh call.
+                from cupy.cuda import cusolver
                 from cupyx.scipy.ndimage import distance_transform_edt
 
                 if cp.cuda.runtime.getDeviceCount() < 1:
@@ -84,8 +87,9 @@ class Compute:
             except (ImportError, OSError, RuntimeError) as exc:
                 raise ValueError(
                     f"CUDA initialization failed ({type(exc).__name__}: {exc}). "
-                    "Install CuPy >= 14 for your CUDA Toolkit in this Python environment "
-                    "(e.g. python -m pip install 'cupy-cuda12x>=14' for CUDA 12.x), "
+                    "Install CuPy >= 14 with its CUDA libraries in this Python environment "
+                    "(e.g. uv pip install 'cupy-cuda12x[ctk]>=14' for CUDA 12.x), "
+                    "and run on a GPU node with a compatible NVIDIA driver, "
                     "or use --device cpu. cuCIM is not required."
                 ) from exc
 

@@ -1,3 +1,5 @@
+# Modified in November 2026: Add support for local files.
+
 """Extract and load sparse, confidence-weighted fiber direction samples.
 
 The extractor reads only Zarr chunks intersecting a requested z range, across
@@ -23,6 +25,8 @@ FORMAT_VERSION = 2
 
 
 def _get_json(session, url):
+    if urlparse(url).scheme == "file":
+        return json.loads(Path(unquote(urlparse(url).path)).read_text())
     response = session.get(url, timeout=60)
     response.raise_for_status()
     return response.json()
@@ -38,28 +42,36 @@ def _read_chunk(session, array_url, metadata, index):
     import requests
 
     url = _chunk_url(array_url, index, metadata)
-    for attempt in range(6):
+    if urlparse(url).scheme == "file":
         try:
-            response = session.get(url, timeout=60)
-            if response.status_code < 500:
-                break
-        except (requests.ConnectionError, requests.Timeout):
+            content = Path(unquote(urlparse(url).path)).read_bytes()
+        except FileNotFoundError:
+            content = None
+    else:
+        for attempt in range(6):
+            try:
+                response = session.get(url, timeout=60)
+                if response.status_code < 500:
+                    break
+            except (requests.ConnectionError, requests.Timeout):
+                if attempt == 5:
+                    raise
             if attempt == 5:
-                raise
-        if attempt == 5:
+                response.raise_for_status()
+            time.sleep(min(2 ** attempt, 8))
+        if response.status_code != 404:
             response.raise_for_status()
-        time.sleep(min(2 ** attempt, 8))
+        content = None if response.status_code == 404 else response.content
     shape = np.asarray(metadata["shape"], dtype=np.int64)
     chunks = np.asarray(metadata["chunks"], dtype=np.int64)
     begin = np.asarray(index, dtype=np.int64) * chunks
     chunk_shape = tuple(np.minimum(chunks, shape - begin))
-    if response.status_code == 404:
+    if content is None:
         return np.full(chunk_shape, metadata.get("fill_value") or 0,
                        dtype=np.dtype(metadata["dtype"]))
-    response.raise_for_status()
     compressor = metadata.get("compressor")
-    decoded = (numcodecs.get_codec(compressor).decode(response.content)
-               if compressor is not None else response.content)
+    decoded = (numcodecs.get_codec(compressor).decode(content)
+               if compressor is not None else content)
     dtype = np.dtype(metadata["dtype"])
     values = np.frombuffer(decoded, dtype=dtype)
     edge_size = int(np.prod(chunk_shape))
@@ -160,6 +172,8 @@ def extract(manifest_url, z_roi, output, *, output_scale=1.0,
             threshold=160, cell_size=2, overwrite=False, workers=1):
     import requests
 
+    if urlparse(str(manifest_url)).scheme not in ("http", "https", "file"):
+        manifest_url = Path(manifest_url).expanduser().resolve().as_uri()
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists() and not overwrite:
@@ -309,7 +323,7 @@ def load_fiber_direction_samples(path, z_begin, z_end):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("manifest", help="HTTP(S) Lasagna fiber manifest")
+    parser.add_argument("manifest", help="local path or HTTP(S) Lasagna fiber manifest")
     parser.add_argument("output", type=Path, help="output packed .npz artifact")
     parser.add_argument("--z-roi", required=True, type=_parse_z_roi,
                         help="output-coordinate half-open z range BEGIN,END")

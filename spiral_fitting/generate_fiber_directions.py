@@ -1,4 +1,4 @@
-"""Export fiber direction samples from an existing HTTP(S) prediction manifest."""
+"""Export fiber direction samples from a local or HTTP(S) prediction manifest."""
 
 from pathlib import Path
 import subprocess
