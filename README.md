@@ -68,10 +68,14 @@ and select the corresponding slice range in the fit configuration.
 
 This project is a work in progress.
 
-## Useful Links
+## Sources
 
-- [Vesuvius Challenge spiral fitting tutorial](https://scrollprize.org/tutorial_spiral)
-- [Vesuvius Challenge](https://scrollprize.org/)
-- [Virtual unwrapping with VC3D](https://scrollprize.org/tutorial_VC3D)
-- [VC3D segmentation tutorial (archived)](https://scrollprize.org/segmentation)
-- [ScrollPrize/villa (Vesuvius Challenge code repository)](https://github.com/ScrollPrize/villa)
+This project uses code from multiple sources. The component READMEs list the specific versions/commits and the locations of original code copies.
+
+
+### Useful links
+
+- [**Vesuvius Challenge**](https://scrollprize.org/) - project overview and background on the Herculaneum scrolls.
+- [**Spiral fitting tutorial**](https://scrollprize.org/tutorial_spiral) - introduction to the fitting workflow.
+- [**Virtual unwrapping with VC3D**](https://scrollprize.org/tutorial_VC3D) - guide to the VC3D workflow.
+- [**VC3D segmentation tutorial (archived)**](https://scrollprize.org/segmentation) - earlier segmentation instructions.

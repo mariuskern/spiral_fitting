@@ -1,17 +1,5 @@
 # Surface detection
 
-
-## Sources
-
-This folder contains code from the following sources:
-
-- [**Vesuvius Challenge - Surface Detection**](https://www.kaggle.com/competitions/vesuvius-challenge-surface-detection/overview)
-- [**2nd Place Solution Vesuvius Challenge – A postprocessing win**](https://www.kaggle.com/competitions/vesuvius-challenge-surface-detection/writeups/2nd-place-solution-vesuvius-challenge-a-postproc)
-- [**local interpolation interference**](https://www.kaggle.com/code/mariusheuser/local-interpolation-interference) (notebook)
-
-The original, unmodified code can be found in `original_code/`.
-
-
 ## Getting started with surface detection
 
 1. Create python environment
@@ -43,9 +31,9 @@ The original, unmodified code can be found in `original_code/`.
     uv pip install python-dotenv
     ```
 
-2. Download data from kaggle [here](https://www.kaggle.com/competitions/vesuvius-challenge-surface-detection/data)
+2. Download the [surface detection competition data on Kaggle](https://www.kaggle.com/competitions/vesuvius-challenge-surface-detection/data).
 
-3. Download both checkpoints from kaggel [here](https://www.kaggle.com/code/mariusheuser/local-interpolation-interference/input)
+3. Download both checkpoints from the [Kaggle notebook's model inputs](https://www.kaggle.com/code/mariusheuser/local-interpolation-interference/input).
 
 4. Configuration using a `.env` File
 
@@ -73,3 +61,13 @@ Environment variables not specified in `.env` retain their default values.
     ```
 
 6. Visualize the results using the [ScrollSlabViewer](https://paul-g2.github.io/ScrollSlabViewer/).
+
+## Sources
+
+This workflow is based on the following Kaggle competition, solution write-up and notebook:
+
+- [**Vesuvius Challenge - Surface Detection**](https://www.kaggle.com/competitions/vesuvius-challenge-surface-detection/overview) - competition overview and task description.
+- [**2nd Place Solution Vesuvius Challenge - A postprocessing win**](https://www.kaggle.com/competitions/vesuvius-challenge-surface-detection/writeups/2nd-place-solution-vesuvius-challenge-a-postproc) - explanation of the method.
+- [**local interpolation interference**](https://www.kaggle.com/code/mariusheuser/local-interpolation-interference) by `mariusheuser` - notebook used as the code source.
+
+The original, unmodified notebook can be found in [`original_code/`](original_code/).

@@ -135,8 +135,8 @@ Tables list all arguments; commands show a typical selection. Flags take no valu
 
 ## Sources
 
-The `vesuvius_sheet_tools` folder contains code from the following GitHub repository:
+The `vesuvius_sheet_tools/` folder contains code from the following GitHub repository:
 
-- [**vesuvius-sheet-tools**](https://github.com/IyanDopico/vesuvius-sheet-tools/tree/cc1fb1429d62670f7dc00943932e90d0e6d31c8a) (Commit: cc1fb14)
+- [**IyanDopico/vesuvius-sheet-tools**](https://github.com/IyanDopico/vesuvius-sheet-tools/tree/cc1fb1429d62670f7dc00943932e90d0e6d31c8a) (Commit: `cc1fb14`)
 
-The original, unmodified code is in `vesuvius_sheet_tools/.original/`.
+The original, unmodified code can be found in [`vesuvius_sheet_tools/.original/`](vesuvius_sheet_tools/.original/).

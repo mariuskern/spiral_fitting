@@ -106,7 +106,9 @@ For sample export and fitting, follow [Spiral Fitting, step 6](../spiral_fitting
 
 ## Sources
 
-- [Model card and inference guide](https://huggingface.co/scrollprize/lasagna-fiber)
-- [ScrollPrize/villa, commit 8aa507c](https://github.com/ScrollPrize/villa/tree/8aa507c1215f1fa8758f13d0538f7af9710e02d7)
+The fiber prediction tools in `villa_8aa507c/` come from the following GitHub repository:
 
-The original, unmodified code is in `villa_8aa507c/.original_code/`.
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/8aa507c1215f1fa8758f13d0538f7af9710e02d7) (Commit: `8aa507c`)
+
+The original, unmodified code can be found in [`villa_8aa507c/.original_code/lasagna/`](villa_8aa507c/.original_code/lasagna/).
+

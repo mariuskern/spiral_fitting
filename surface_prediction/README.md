@@ -3,14 +3,6 @@
 Predict surfaces in a Zarr volume using an nnUNet model. `main.py` runs inference,
 blending, and finalization in sequence and stops if a step fails.
 
-## Sources
-
-This folder contains code from the following GitHub repository:
-
-- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/8aa507c1215f1fa8758f13d0538f7af9710e02d7) (Commit: 8aa507c)
-
-The original, unmodified code is in `villa_8aa507c/original_code/`.
-
 ## Getting Started
 
 Run the following commands from the `surface_prediction/` directory. From the
@@ -193,3 +185,12 @@ main.py environment values are ignored.
 Boolean variables accept `1/0`, `true/false`, `yes/no`, or `on/off`
 (case-insensitive). Use `--no-threshold`, `--no-delete_intermediates`, or
 `--no-dry_run` to override an enabled environment flag.
+
+## Sources
+
+The inference, blending and finalization code in `villa_8aa507c/` comes from the following GitHub repository:
+
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/8aa507c1215f1fa8758f13d0538f7af9710e02d7) (Commit: `8aa507c`)
+
+The original, unmodified code can be found in [`villa_8aa507c/original_code/`](villa_8aa507c/original_code/).
+

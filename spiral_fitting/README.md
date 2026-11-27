@@ -31,12 +31,13 @@ uv pip install python-dotenv
 
 | Dataset | Fitting inputs | Corresponding CT volume |
 | --- | --- | --- |
-| PHercParis4 | [ash2txt](https://dl.ash2txt.org/datasets/spiral_datasets/PHercParis4/) · [Hugging Face](https://huggingface.co/buckets/scrollprize/datasets/tree/spiral/PHercParis4) | [20260411134726-2.400um-0.2m-78keV-masked.zarr](https://vesuvius-challenge-open-data.s3.amazonaws.com/index.html#PHercParis4/volumes/20260411134726-2.400um-0.2m-78keV-masked.zarr/) |
-| PHerc0332 | [ash2txt](https://dl.ash2txt.org/datasets/spiral_datasets/PHerc0332/20251211183505/) | [20251211183505-2.399um-0.2m-78keV-masked-fast-q1-c64-v0.3.2.vcd3d.zarr](https://vesuvius-challenge-open-data.s3.amazonaws.com/index.html#PHerc0332/volumes/20251211183505-2.399um-0.2m-78keV-masked-fast-q1-c64-v0.3.2.vcd3d.zarr/) |
+| PHercParis4 | [Fitting inputs (dl.ash2txt.org)](https://dl.ash2txt.org/datasets/spiral_datasets/PHercParis4/) · [Fitting inputs (Hugging Face)](https://huggingface.co/buckets/scrollprize/datasets/tree/spiral/PHercParis4) | [CT scan: 2026-04-11, 2.400 µm, 78 keV (Zarr)](https://vesuvius-challenge-open-data.s3.amazonaws.com/index.html#PHercParis4/volumes/20260411134726-2.400um-0.2m-78keV-masked.zarr/) |
+| PHerc0332 | [Fitting inputs (dl.ash2txt.org)](https://dl.ash2txt.org/datasets/spiral_datasets/PHerc0332/20251211183505/) | [CT scan: 2025-12-11, 2.399 µm, 78 keV (Zarr)](https://vesuvius-challenge-open-data.s3.amazonaws.com/index.html#PHerc0332/volumes/20251211183505-2.399um-0.2m-78keV-masked-fast-q1-c64-v0.3.2.vcd3d.zarr/) |
 
-More datasets can be found here:
-- [dl.ash2txt.org](https://dl.ash2txt.org/datasets/spiral_datasets/)
-- [huggingface.co](https://huggingface.co/buckets/scrollprize/datasets/tree/spiral)
+More fitting datasets:
+
+- [Spiral fitting dataset collection (dl.ash2txt.org)](https://dl.ash2txt.org/datasets/spiral_datasets/)
+- [Spiral fitting dataset collection (Hugging Face)](https://huggingface.co/buckets/scrollprize/datasets/tree/spiral)
 
 PHercParis4 annotations use **9.6 µm voxels**, level `2` of the **2.4 µm** CT:
 multiply coordinates by `4` for level `0`, and set `voxel_size_um` to `9.6`
@@ -195,11 +196,46 @@ existing **3D ink prediction** through fitted surfaces into 2D images.
 
 ## Sources
 
-| Code | Source | Original copy |
-| --- | --- | --- |
-| Current fitter | [ScrollPrize/villa, 8aa507c](https://github.com/ScrollPrize/villa/tree/8aa507c1215f1fa8758f13d0538f7af9710e02d7) | `.original_code/` |
-| Deprecated `.out/` | [ScrollPrize/villa, d8c5f48](https://github.com/ScrollPrize/villa/tree/d8c5f488a105286c548c99c5f7c7ad9f29e3ed14) | `original_code/` |
-| Deprecated `.out/spiral_7769da8/` (working) | [villa, 7769da8](https://github.com/ScrollPrize/villa/tree/7769da8cf2233310570608feecc127066a7c0c7c/volume-cartographer/scripts/spiral) + [spiral-fit-consumer-gpu, f189740](https://github.com/7jycwjmbfn-eng/spiral-fit-consumer-gpu/commit/f189740211f462193973055a32e3269c03301587); `spiral_progress.py`: [villa, 9761f14](https://github.com/ScrollPrize/villa/blob/9761f14773a3ed41f2459bbf689a8f1998a656ed/volume-cartographer/scripts/spiral/spiral_progress.py) | |
-| Deprecated `.out/spiral_6732d35/` (not working) | [villa, 6732d35](https://github.com/ScrollPrize/villa/tree/6732d3587bc3224a8a69a15886fb68c6e57a9342/volume-cartographer/scripts/spiral) + [spiral-fit-consumer-gpu, f189740](https://github.com/7jycwjmbfn-eng/spiral-fit-consumer-gpu/commit/f189740211f462193973055a32e3269c03301587); `spiral_progress.py`: [villa, 9761f14](https://github.com/ScrollPrize/villa/blob/9761f14773a3ed41f2459bbf689a8f1998a656ed/volume-cartographer/scripts/spiral/spiral_progress.py) | |
+### Current fitter: `villa_8aa507c/`
 
-Use the current fitter; `.out/` versions are deprecated.
+The `villa_8aa507c/` folder contains the spiral-fitting code from the following GitHub repository:
+
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/8aa507c1215f1fa8758f13d0538f7af9710e02d7/spiral-fitting) (Commit: `8aa507c`)
+
+The original, unmodified code can be found in
+[`villa_8aa507c/.original_code/spiral-fitting/`](villa_8aa507c/.original_code/spiral-fitting/).
+
+### Earlier fitter: `villa_8aa507c/.old/`
+
+This folder contains an earlier version of the fitting code from the following GitHub repository:
+
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/d8c5f488a105286c548c99c5f7c7ad9f29e3ed14) (Commit: `d8c5f48`)
+
+The original, unmodified code can be found in
+[`villa_8aa507c/.old/original_code/`](villa_8aa507c/.old/original_code/).
+
+The following subfolders combine code from additional sources.
+
+#### `villa_8aa507c/.old/spiral_7769da8/`
+
+This folder combines the spiral-fitting code from **ScrollPrize/villa** with
+a faster implementation from **7jycwjmbfn-eng/spiral-fit-consumer-gpu**.
+This version of the spiral fitting is working.
+
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/7769da8cf2233310570608feecc127066a7c0c7c/volume-cartographer/scripts/spiral) (Commit: `7769da8`) - base spiral-fitting code.
+- [**7jycwjmbfn-eng/spiral-fit-consumer-gpu**](https://github.com/7jycwjmbfn-eng/spiral-fit-consumer-gpu/commit/f189740211f462193973055a32e3269c03301587) (Commit: `f189740`) - faster fitting implementation.
+- [**ScrollPrize/villa - spiral_progress.py**](https://github.com/ScrollPrize/villa/blob/9761f14773a3ed41f2459bbf689a8f1998a656ed/volume-cartographer/scripts/spiral/spiral_progress.py) (Commit: `9761f14`) - source of `spiral_progress.py` only.
+
+#### `villa_8aa507c/.old/spiral_6732d35/`
+
+This folder combines the spiral-fitting code from **ScrollPrize/villa** with
+a faster implementation from **7jycwjmbfn-eng/spiral-fit-consumer-gpu**.
+This version is **not working**.
+
+- [**ScrollPrize/villa**](https://github.com/ScrollPrize/villa/tree/6732d3587bc3224a8a69a15886fb68c6e57a9342/volume-cartographer/scripts/spiral) (Commit: `6732d35`) - base spiral-fitting code.
+- [**7jycwjmbfn-eng/spiral-fit-consumer-gpu**](https://github.com/7jycwjmbfn-eng/spiral-fit-consumer-gpu/commit/f189740211f462193973055a32e3269c03301587) (Commit: `f189740`) - faster fitting implementation.
+- [**ScrollPrize/villa - spiral_progress.py**](https://github.com/ScrollPrize/villa/blob/9761f14773a3ed41f2459bbf689a8f1998a656ed/volume-cartographer/scripts/spiral/spiral_progress.py) (Commit: `9761f14`) - source of `spiral_progress.py` only.
+
+> **Note:** The `.old/` folder and both variants above are deprecated. Use the
+> current fitter in [`villa_8aa507c/`](villa_8aa507c/) for new runs.
+
