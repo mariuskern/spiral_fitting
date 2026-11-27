@@ -187,6 +187,36 @@ python visualize_meshes.py "<fit_run>" \
 | `--dpi` | Export resolution (default: `160`). |
 | `-h` / `--help` | Flag: show CLI help. |
 
+### 6. Rank meshes for ink detection
+
+Print estimated papyrus coverage and area per winding, sorted by coverage.
+
+```bash
+python rank_meshes.py "<fit_run>" \
+    --ct "<masked_ct_volume>" \
+    --ct-dataset 0 \
+    --spliced \
+    --top 20
+```
+
+| Argument | Purpose |
+| --- | --- |
+| `<fit_run>` (`meshes`) | **Required.** Fit run, `meshes/` or `meshes/fitted/`. |
+| `--ct` | **Required.** Papyrus mask or CT Zarr with zero background, aligned with the meshes. |
+| `--ct-dataset` | Array inside the Zarr group (default: `0`; Scroll3: `0`, PHercParis4 at 9.6 µm: `2`); ignored for a standalone array. |
+| `--threshold` | Count voxel values above this threshold as material (default: `0`). |
+| `--samples` | Area-uniform surface samples per mesh (default: `100000`). |
+| `--seed` | Nonnegative sampling seed for reproducible results (default: `0`). |
+| `--sort-by` | `coverage`: papyrus percentage; `area`: absolute papyrus area (default: `coverage`). |
+| `--top` | Print the first N results (default: all). |
+| `--meshes <n> [<n> ...]` | Winding numbers; mutually exclusive with `--mesh-range`. |
+| `--mesh-range <min> <max>` | Inclusive winding range (default: all). |
+| `--spliced` | Flag: use `wNNN_spliced` instead of regular `wNNN` meshes. |
+| `--voxel-size-um` | Mesh voxel size in µm for areas in cm² (default: infer from `meta.json`, otherwise use voxel²). |
+| `--coordinate-scale` | Volume voxels per mesh voxel (default: `1`; use `4` for 9.6 µm meshes in a 2.4 µm CT). |
+| `--volume-origin <x> <y> <z>` | First volume voxel in mesh coordinates for a crop (default: `0 0 0`). Mapping: `(mesh_xyz - origin) * coordinate_scale`. |
+| `-h` / `--help` | Flag: show CLI help. |
+
 <a id="getting-started-with-render_inkpy"></a>
 
 For flattening and CT layer export, continue with the
