@@ -1,10 +1,13 @@
-"""Print a local or remote Zarr hierarchy without reading array chunks."""
+"""Inspect Zarr metadata, with optional value sampling and binary checks."""
 
 import argparse
+import itertools
 import json
+import math
 import os
 from pathlib import Path
 import sys
+import time
 from urllib.parse import unquote, urlencode, urlsplit, urlunsplit
 import xml.etree.ElementTree as ET
 
@@ -175,6 +178,103 @@ class MetadataReader:
         return info
 
 
+def value_for_json(value):
+    if isinstance(value, np.generic):
+        value = value.item()
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if value is None or isinstance(value, (str, bool, int, float)):
+        return value
+    return str(value)
+
+
+def sample_values(array, max_elements=65536, max_values=16):
+    """Read a bounded block at the start; this cannot prove an array is binary."""
+    budget = max_elements
+    slices = []
+    for size, chunk in reversed(list(zip(array.shape, array.chunks))):
+        length = min(size, chunk, budget)
+        slices.append(slice(0, length))
+        budget = max(1, budget // max(1, length))
+    data = np.asarray(array[tuple(reversed(slices))])
+    values = np.unique(data)
+    return {
+        "shape": list(data.shape),
+        "elements": int(data.size),
+        "min": value_for_json(data.min()) if data.size else None,
+        "max": value_for_json(data.max()) if data.size else None,
+        "values": [value_for_json(value) for value in values[:max_values]],
+        "unique_count": len(values),
+        "values_truncated": len(values) > max_values,
+    }
+
+
+def check_binary(array, label=None):
+    """Prove all values are 0/1, or stop at the first chunk that disproves it."""
+    counts = [(size + chunk - 1) // chunk for size, chunk in zip(array.shape, array.chunks)]
+    total = math.prod(counts)
+    result = {
+        "is_binary": True if total else None,
+        "allowed_values": [0, 1],
+        "checked_chunks": 0,
+        "total_chunks": total,
+        "checked_elements": 0,
+        "scan_complete": False,
+        "values_seen": [],
+        "invalid_examples": [],
+    }
+    seen = set()
+    last_report = time.monotonic()
+    if label is not None:
+        print(f"Checking binary (0/1): {label} | {total} chunks", file=sys.stderr, flush=True)
+    for indices in itertools.product(*(range(count) for count in counts)):
+        block = tuple(slice(index * chunk, min((index + 1) * chunk, size))
+                      for index, chunk, size in zip(indices, array.chunks, array.shape))
+        data = np.asarray(array[block])
+        zero, one = data == 0, data == 1
+        allowed = zero | one
+        result["checked_chunks"] += 1
+        result["checked_elements"] += int(data.size)
+        if np.any(zero):
+            seen.add(0)
+        if np.any(one):
+            seen.add(1)
+        if not np.all(allowed):
+            result["is_binary"] = False
+            invalid = np.unique(data[~allowed])[:16]
+            result["invalid_examples"] = [value_for_json(value) for value in invalid]
+            break
+        now = time.monotonic()
+        if label is not None and now - last_report >= 2:
+            print(f"  {label}: {result['checked_chunks']}/{total} chunks checked", file=sys.stderr, flush=True)
+            last_report = now
+    result["scan_complete"] = result["checked_chunks"] == total
+    result["values_seen"] = sorted(seen)
+    return result
+
+
+def add_value_checks(info, source, sample=False, binary=False):
+    # Metadata inspection still works without Zarr or any custom codecs.
+    try:
+        import zarr
+    except ImportError as error:
+        raise ValueError("--sample and --check-binary require the zarr package and the input codecs.") from error
+
+    root = zarr.open(normalize_url(source), mode="r")
+
+    def visit(node):
+        if node["type"] == "array":
+            array = root[node["path"].lstrip("/")] if isinstance(root, zarr.Group) else root
+            if sample:
+                node["sample"] = sample_values(array)
+            if binary:
+                node["binary_check"] = check_binary(array, node["path"])
+        for child in node.get("children", []):
+            visit(child)
+
+    visit(info)
+
+
 def print_tree(info, depth=0):
     indent = "  " * depth
     name = info["path"].rstrip("/").rsplit("/", 1)[-1] or "/"
@@ -193,23 +293,41 @@ def print_tree(info, depth=0):
     print(line)
     if "attrs" in info:
         print(f"{indent}  attrs: {json.dumps(info['attrs'], ensure_ascii=False)}")
+    if "sample" in info:
+        sample = info["sample"]
+        suffix = " (first 16 unique values)" if sample["values_truncated"] else ""
+        print(f"{indent}  Sample ({sample['elements']} elements): min={sample['min']}, max={sample['max']}, "
+              f"values={sample['values']}{suffix}; sample only, not a binary check")
+    if "binary_check" in info:
+        check = info["binary_check"]
+        if check["is_binary"] is None:
+            print(f"{indent}  Binary (0/1): empty array; no values to check")
+        elif check["is_binary"]:
+            print(f"{indent}  Binary (0/1): yes | all {check['checked_chunks']} chunks checked | values={check['values_seen']}")
+        else:
+            print(f"{indent}  Binary (0/1): no | unexpected values={check['invalid_examples']} "
+                  f"| checked {check['checked_chunks']}/{check['total_chunks']} chunks")
     for child in info.get("children", []):
         print_tree(child, depth + 1)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Print local or remote Zarr groups and array dimensions without reading array data."
+        description="Inspect local or remote Zarr metadata. Optionally sample values or check for binary 0/1 data."
     )
     parser.add_argument("source", help="Local directory path or URL of a Zarr group or array (Zarr v2 or v3).")
     parser.add_argument("--path", default="", help="Inspect only this group or array inside the store.")
     parser.add_argument("--attrs", action="store_true", help="Also print group and array attributes.")
     parser.add_argument("--json", action="store_true", help="Print the metadata as JSON instead of a tree.")
+    parser.add_argument("--sample", action="store_true", help="Read up to 65536 values from the first chunk of each selected array; print sample min/max and up to 16 unique values.")
+    parser.add_argument("--check-binary", action="store_true", help="Read all chunks to verify every value is 0 or 1; stop early if another value is found. Use --path to select an array.")
     args = parser.parse_args()
 
     try:
         path = args.path.strip("/")
         info = MetadataReader(args.source).inspect("" if path == "." else path, args.attrs)
+        if args.sample or args.check_binary:
+            add_value_checks(info, args.source, args.sample, args.check_binary)
     except (OSError, ValueError) as error:
         parser.exit(1, f"Error: {error}\n")
     if args.json:

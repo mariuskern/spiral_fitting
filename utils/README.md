@@ -1,6 +1,6 @@
 # Utils
 
-Run commands from `utils/` with your Python environment active.
+Run commands from `utils/` with a suitable environment activated (e.g. `spiral-fitting`).
 Use `python <script> --help` for all options.
 
 ## Download
@@ -71,6 +71,34 @@ Use manifests for large collections and `--direct` for small selections.
 
 ## Conversion
 
+### `squeeze_zarr.py` and `threshold_zarr.py`
+
+Select a channel from `(C, Z, Y, X)` to produce 3D data, or threshold an array to
+binary `uint8` (0/1). Both write standalone arrays chunk by chunk.
+
+```bash
+python squeeze_zarr.py "prediction.zarr" --array 0 --channel 0 --out "surface_3d.zarr"
+python threshold_zarr.py "surface_3d.zarr" --threshold 127 --out "surface_binary.zarr"
+```
+
+| Argument | Purpose |
+| --- | --- |
+| `<source>` | **Required.** Local Zarr path or URL. |
+| `--array <path>` | Required for group inputs: select one array, e.g. `2` or `group/0`. |
+| `--out <path>` | **Required.** Output standalone Zarr array. |
+| `--channel` | Squeeze only: first-axis channel (default: `0`); 3D input is copied unchanged. |
+| `--threshold` | **Required** for threshold: values strictly above it become `1`, all others `0`. Match the input range, e.g. `127` for 0–255 or `0.5` for probabilities. |
+| `--overwrite` | Replace existing output. Input and output must not overlap. |
+| `-h` / `--help` | Show CLI help. |
+
+Use `inspect_zarr.py` to find array paths first. Groups may contain different
+resolutions; each conversion processes one explicit `--array`, leaving the source
+and other arrays unchanged. No array is selected automatically from a group.
+
+Skip squeeze for 3D input and threshold for existing 0/1 data. Threshold preserves
+the shape and works on 3D or 4D input. Neither tool crops Z or changes the spatial
+origin; inputs must already align with the dataset's voxel frame.
+
 ### `zarr_to_tiff.py`
 
 Export a Zarr volume as a TIFF stack and individual slices in `layers/`.
@@ -114,12 +142,13 @@ python tiff_to_zarr.py "<input.tiff>" "<output.zarr>" --mul 255
 ### `inspect_zarr.py`
 
 Show groups, array shapes, chunks and dtypes for a local path or remote URL.
-Reads metadata only; supports Zarr v2/v3 without installing custom codecs.
+By default, reads metadata only; supports Zarr v2/v3 without custom codecs.
 Requires NumPy and fsspec (`fsspec[http]` for HTTP URLs).
 
 ```bash
 python inspect_zarr.py "../data/scan.zarr"
 python inspect_zarr.py "<url>" --path labels --attrs
+python inspect_zarr.py "prediction.zarr" --path 0 --sample --check-binary
 ```
 
 | Argument | Purpose |
@@ -128,9 +157,13 @@ python inspect_zarr.py "<url>" --path labels --attrs
 | `--path <path>` | Inspect only this subgroup or array. |
 | `--attrs` | Include group and array attributes. |
 | `--json` | Print JSON instead of a tree. |
+| `--sample` | Read up to 65536 values from the first chunk; show sample min/max and up to 16 unique values. |
+| `--check-binary` | Check all chunks for values 0/1; stop at the first other value. Can read the entire selected array. |
 | `-h` / `--help` | Show CLI help. |
 
 S3 browser links (`index.html#...`) are accepted.
+Value sampling/checks require `zarr` and the input codecs. A 0/255 mask is not a
+0/1 mask; `--sample` alone can miss non-binary values elsewhere.
 
 ## Sources
 
