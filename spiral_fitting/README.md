@@ -24,6 +24,8 @@ conda activate spiral-fitting
 pip install uv
 uv pip install -e villa_8aa507c
 uv pip install python-dotenv
+uv pip install "vc-delta3d[zarr]"
+uv pip install --upgrade "vc-delta3d[zarr]"
 ```
 
 
