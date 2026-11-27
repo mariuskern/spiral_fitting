@@ -10,10 +10,19 @@ import sys
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
-
 PACKAGE_ROOT = Path(__file__).resolve().parent
+ENV_PATH = PACKAGE_ROOT.parent / ".env"
+
+try:
+    with ENV_PATH.open(encoding="utf-8") as env_file:
+        load_dotenv(stream=env_file, override=True)
+except FileNotFoundError:
+    # Configuration can also be supplied entirely through CLI options or exports.
+    pass
+except OSError as error:
+    raise SystemExit(f"Cannot read configuration file {ENV_PATH}: {error}") from error
+
+
 RUN_MODULE = "villa_8aa507c.models.run"
 
 
@@ -163,7 +172,10 @@ def validate_arguments(parser, args):
     ]
 
     if missing:
-        parser.error("Missing configuration: provide " + ", ".join(missing))
+        parser.error(
+            "Missing configuration: provide " + ", ".join(missing)
+            + f"\nConfiguration file: {ENV_PATH}"
+        )
 
     for name in ("model_path", "input_dir", "output_dir"):
         value = os.path.expanduser(os.path.expandvars(getattr(args, name)))
